@@ -1,0 +1,3 @@
+# Kanban App
+
+@AGENTS.md

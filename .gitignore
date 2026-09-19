@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# firebase credentials (never commit service-account keys)
+serviceAccountKey.json
+*firebase-adminsdk*.json
+
 # persisted local app data
 /.data
 

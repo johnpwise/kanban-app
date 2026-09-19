@@ -31,6 +31,14 @@ This app inherits shared workflow rules and Next.js stack guidance from:
 - `integration`: `npm run test`
 - `e2e`: `npm run test:e2e`
 
+## Firebase / Firestore safety
+
+A Firebase MCP server (Auth + Firestore only, via `firebase-tools mcp --only auth,firestore`) is registered project-scoped for this repo — see `.mcp.json` (Claude Code) and `.codex/config.toml` (Codex). It authenticates as the developer's own `firebase login` session, not a repo-held credential.
+
+- Only one Firebase project is linked to this repo (`.firebaserc` → `kanban-app-fa4b7`); there is no dev/prod split. Treat it as production-equivalent.
+- Never perform Firestore writes/deletes, Firebase Auth user mutations, Security Rules deploys, or any `firebase deploy` — via the MCP tools or the CLI — without explicit, in-the-moment user approval for that specific action.
+- Read-only Firestore/Auth inspection (reading documents, listing users, checking rules) does not require approval each time.
+
 ### Working model
 
 Agents should behave like junior developers being trained into this workflow.
