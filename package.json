@@ -2,26 +2,33 @@
   "name": "kanban-app",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "seed:demo": "node scripts/seed-demo-project.mjs",
     "test:unit": "vitest run --config vitest.unit.config.mts",
     "validate:component-layout": "node scripts/validate-component-layout.mjs",
     "test:component": "npm run validate:component-layout && vitest run --config vitest.component.config.mts",
     "test": "npm run test:unit && npm run test:component",
-    "test:e2e": "playwright test",
+    "test:integration": "env -u DEBUG firebase emulators:exec --only firestore --project demo-kanban-app-test \"npm run test:integration:run\"",
+    "test:integration:run": "vitest run --config vitest.integration.config.mts",
+    "test:e2e": "env -u DEBUG firebase emulators:exec --only firestore --project demo-kanban-app-e2e \"npm run test:e2e:run\"",
+    "test:e2e:run": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
+    "firebase-admin": "14.4.0",
     "lucide-react": "^1.45.0",
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "zod": "^4.6.4",
-    "zustand": "^5.0.15"
+    "zod": "^4.6.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -37,6 +44,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "firebase-tools": "15.26.0",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4",
     "typescript": "^5",

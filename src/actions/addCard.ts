@@ -2,6 +2,7 @@
 
 import { addCard } from "@/lib/services/board";
 import { addCardRequestSchema } from "@/schemas/board";
+import { projectIdSchema } from "@/schemas/project";
 
 import type { Board } from "@/schemas/board";
 
@@ -13,9 +14,15 @@ export interface AddCardActionState {
 
 export async function addCardAction(
   _previousState: AddCardActionState,
+  projectId: unknown,
   request: unknown,
 ): Promise<AddCardActionState> {
+  const parsedProjectId = projectIdSchema.safeParse(projectId);
   const parsed = addCardRequestSchema.safeParse(request);
+
+  if (!parsedProjectId.success) {
+    return { status: "error", message: "Invalid project." };
+  }
 
   if (!parsed.success) {
     return {
@@ -25,10 +32,11 @@ export async function addCardAction(
   }
 
   try {
-    const board = await addCard(parsed.data);
+    const board = await addCard(parsedProjectId.data, parsed.data);
 
     return { status: "success", board };
-  } catch {
+  } catch (error) {
+    console.error("Failed to add card.", error);
     return {
       status: "error",
       message: "Could not add the card. Please try again.",

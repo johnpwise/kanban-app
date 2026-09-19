@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+firestore-debug.log
+firebase-debug.log
 
 # next.js
 /.next/
@@ -49,3 +51,6 @@ next-env.d.ts
 
 # local TODO lists
 TODO.md
+
+# local development files
+.agent-workflows

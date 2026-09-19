@@ -3,8 +3,6 @@
 import type { ChangeEvent } from "react";
 import { Filter } from "lucide-react";
 
-import { useBoardFilterStore } from "@/store/boardFilterStore";
-
 import type { CardLabel } from "@/schemas/board";
 
 import { LABEL_FILTER_TEST_IDS } from "./LabelFilter.testIds";
@@ -16,13 +14,16 @@ const LABEL_OPTIONS: { value: CardLabel | "all"; label: string }[] = [
   { value: "chore", label: "Chore" },
 ];
 
-export default function LabelFilter() {
-  const activeLabel = useBoardFilterStore((state) => state.activeLabel);
-  const setActiveLabel = useBoardFilterStore((state) => state.setActiveLabel);
+interface LabelFilterProps {
+  activeLabel: CardLabel | null;
+  onChange: (label: CardLabel | null) => void;
+}
+
+export default function LabelFilter({ activeLabel, onChange }: LabelFilterProps) {
 
   function handleChange(event: ChangeEvent<HTMLSelectElement>) {
     const value = event.target.value;
-    setActiveLabel(value === "all" ? null : (value as CardLabel));
+    onChange(value === "all" ? null : (value as CardLabel));
   }
 
   return (
