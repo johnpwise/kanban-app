@@ -58,3 +58,10 @@ TODO.md
 
 # local development files
 .agent-workflows
+/dist/
+.vinext/
+.wrangler/
+.dev.vars
+
+# personal Claude Code overrides
+.claude/settings.local.json

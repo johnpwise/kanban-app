@@ -20,18 +20,31 @@
     "test:e2e": "NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 env -u DEBUG firebase emulators:exec --only firestore,auth --project demo-kanban-app-e2e \"npm run test:e2e:run\"",
     "test:e2e:run": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "dev:vinext": "vinext dev --port 3001",
+    "build:vinext": "vinext build",
+    "start:vinext": "wrangler dev --config dist/server/wrangler.json",
+    "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json",
+    "deploy:cloudflare": "wrangler deploy --config dist/server/wrangler.json",
+    "preview:cloudflare": "wrangler versions upload --config dist/server/wrangler.json"
   },
   "dependencies": {
+    "@google-cloud/firestore": "9.2.0",
+    "@google-cloud/firestore-api": "0.2.0",
+    "@vinext/cloudflare": "^1.0.0-beta.8",
     "firebase": "^12.19.0",
     "firebase-admin": "14.4.0",
+    "google-gax": "6.4.0",
     "lucide-react": "^1.45.0",
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-server-dom-webpack": "^19.2.8",
+    "vinext": "^1.0.0-beta.10",
     "zod": "^4.6.4"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.56.0",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/postcss": "^4",
@@ -43,13 +56,17 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.1.1",
+    "@vitejs/plugin-rsc": "^0.5.35",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "firebase-tools": "15.26.0",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vite": "^8.3.0",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^5.0.0"
-  }
+    "vitest": "^5.0.0",
+    "wrangler": "^4.135.0"
+  },
+  "type": "module"
 }
