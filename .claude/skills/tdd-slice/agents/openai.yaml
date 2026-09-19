@@ -1,0 +1,6 @@
+name: tdd-slice
+version: 1
+interface:
+  display_name: TDD Slice
+  short_description: Drive one TDD increment through RED, GREEN, and REFACTOR in one context, with a runtime and compatibility audit before handoff.
+  default_prompt: Drive this implementation increment through RED (capture the failing test first), GREEN (smallest change that passes), and REFACTOR, then run the runtime and compatibility audit.

@@ -1,0 +1,6 @@
+name: create-develop-pr
+version: 1
+interface:
+  display_name: Create Develop PR
+  short_description: Open a live PR from the current pushed branch into develop, on explicit request only.
+  default_prompt: Create a pull request against develop for the current pushed branch, built from the complete commit history since the merge base.

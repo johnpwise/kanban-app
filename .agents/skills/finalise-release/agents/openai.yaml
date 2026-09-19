@@ -1,0 +1,6 @@
+name: finalise-release
+version: 1
+interface:
+  display_name: Finalise Release
+  short_description: Verify release PRs are merged, tag the exact main merge commit, clean up the release branch.
+  default_prompt: Finalise release <version>

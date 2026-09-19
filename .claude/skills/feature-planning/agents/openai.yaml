@@ -1,0 +1,6 @@
+name: feature-planning
+version: 1
+interface:
+  display_name: Feature Planning
+  short_description: Turn a feature or bug request into a small incremental delivery plan with a lean test strategy and explicit evidence gates.
+  default_prompt: Produce an incremental delivery plan for this request — complexity classification, ordered TDD increments, capability owners, test_layer_matrix, and pre-implementation failing-test evidence expectations.

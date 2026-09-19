@@ -1,0 +1,6 @@
+name: finalise-hotfix
+version: 1
+interface:
+  display_name: Finalise Hotfix
+  short_description: Verify hotfix PRs are merged, tag the exact main merge commit, clean up the hotfix branch.
+  default_prompt: Finalise hotfix <version>

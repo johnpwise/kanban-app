@@ -1,0 +1,6 @@
+name: start-release
+version: 1
+interface:
+  display_name: Start Release
+  short_description: Create release/<version> from develop, bump the npm version, commit and push. No PR or tag.
+  default_prompt: Start release <version>

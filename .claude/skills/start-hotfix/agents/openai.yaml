@@ -1,0 +1,6 @@
+name: start-hotfix
+version: 1
+interface:
+  display_name: Start Hotfix
+  short_description: Create hotfix/<version> from main, bump the npm version, commit and push. No PR or tag.
+  default_prompt: Start hotfix <version>

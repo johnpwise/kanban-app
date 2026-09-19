@@ -1,0 +1,6 @@
+name: commit-and-push
+version: 1
+interface:
+  display_name: Commit and Push
+  short_description: Stage scoped changes, write a Conventional Commit, and push. Never opens a PR.
+  default_prompt: Commit the current changes with a Conventional Commit message and push the branch. Do not open a pull request.

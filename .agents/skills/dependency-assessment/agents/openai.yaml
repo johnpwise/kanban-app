@@ -1,0 +1,6 @@
+name: dependency-assessment
+version: 1
+interface:
+  display_name: Dependency Assessment
+  short_description: Assess a proposed dependency addition or version change — approve, reject, or defer — with a bias toward minimalism and long-term cost.
+  default_prompt: Assess this dependency for necessity, build-vs-buy, overhead, maturity, and scope; return approve/reject/defer with rationale, alternatives, risks, and post-install validation checks, and flag it for user approval if it touches production runtime, the build pipeline, broad tooling, or licensing.

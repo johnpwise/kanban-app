@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+@custom-variant dark (&:where(.dark, .dark *));
+
+html {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background-color: color-mix(in oklch, var(--color-indigo-500) 35%, transparent);
+}

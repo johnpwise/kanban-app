@@ -1,0 +1,6 @@
+name: create-hotfix-prs
+version: 1
+interface:
+  display_name: Create Hotfix PRs
+  short_description: Open hotfix/<version> PRs into main and develop. No merge, no tag.
+  default_prompt: Create hotfix PRs <version>

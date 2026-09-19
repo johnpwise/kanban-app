@@ -1,0 +1,6 @@
+name: create-annotated-tag
+version: 1
+interface:
+  display_name: Create Annotated Tag
+  short_description: Create and push one annotated tag against an exact target commit. Refuses to move existing tags.
+  default_prompt: Create annotated tag <tag> at commit <commit> with annotation "<annotation>".
