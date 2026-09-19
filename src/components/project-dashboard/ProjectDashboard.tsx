@@ -28,7 +28,7 @@ export default function ProjectDashboard({ projects, loadError }: ProjectDashboa
           Projects
         </h2>
         <p className="text-sm text-slate-600 dark:text-slate-400">
-          Keep each board and its cards separate.
+          Keep boards and their cards separate.
         </p>
       </div>
 
