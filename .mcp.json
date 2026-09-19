@@ -11,6 +11,10 @@
         "Authorization": "Bearer ${GH_MCP_HEADER_VALUE}",
         "X-MCP-Toolsets": "context,repos,pull_requests"
       }
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"]
     }
   }
 }
