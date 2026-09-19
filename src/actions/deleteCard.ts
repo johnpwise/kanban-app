@@ -1,6 +1,7 @@
 "use server";
 
 import { deleteCard } from "@/lib/services/board";
+import { getCurrentUser } from "@/lib/services/session";
 import { deleteCardRequestSchema } from "@/schemas/board";
 import { projectIdSchema } from "@/schemas/project";
 
@@ -17,6 +18,12 @@ export async function deleteCardAction(
   projectId: unknown,
   request: unknown,
 ): Promise<DeleteCardActionState> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { status: "error", message: "You must be signed in to delete a card." };
+  }
+
   const parsedProjectId = projectIdSchema.safeParse(projectId);
   const parsed = deleteCardRequestSchema.safeParse(request);
 

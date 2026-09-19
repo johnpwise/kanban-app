@@ -38,6 +38,7 @@ A Firebase MCP server (Auth + Firestore only, via `firebase-tools mcp --only aut
 - Only one Firebase project is linked to this repo (`.firebaserc` → `kanban-app-fa4b7`); there is no dev/prod split. Treat it as production-equivalent.
 - Never perform Firestore writes/deletes, Firebase Auth user mutations, Security Rules deploys, or any `firebase deploy` — via the MCP tools or the CLI — without explicit, in-the-moment user approval for that specific action.
 - Read-only Firestore/Auth inspection (reading documents, listing users, checking rules) does not require approval each time.
+- The frontend uses Firebase Auth (email/password) for sign-in. Session state is a server-verified, `httpOnly` cookie (`src/lib/services/session.ts`, checked via `firebase-admin`'s `verifySessionCookie`) — never a client-trusted value. The client Firebase SDK (`src/lib/firebase/client.ts`) only performs the credential check in the browser; it is not the source of truth for who's signed in on the server. Auth user mutations (creating/deleting/disabling users, changing custom claims) fall under the same "no writes without explicit approval" rule above.
 
 ## GitHub safety
 

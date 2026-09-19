@@ -1,6 +1,7 @@
 "use server";
 
 import { addCard } from "@/lib/services/board";
+import { getCurrentUser } from "@/lib/services/session";
 import { addCardRequestSchema } from "@/schemas/board";
 import { projectIdSchema } from "@/schemas/project";
 
@@ -17,6 +18,12 @@ export async function addCardAction(
   projectId: unknown,
   request: unknown,
 ): Promise<AddCardActionState> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { status: "error", message: "You must be signed in to add a card." };
+  }
+
   const parsedProjectId = projectIdSchema.safeParse(projectId);
   const parsed = addCardRequestSchema.safeParse(request);
 

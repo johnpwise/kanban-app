@@ -1,20 +1,38 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createProject } from "@/lib/services/projects";
+import { getCurrentUser } from "@/lib/services/session";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createProjectAction } from "./createProject";
 
 vi.mock("@/lib/services/projects", () => ({ createProject: vi.fn() }));
+vi.mock("@/lib/services/session", () => ({ getCurrentUser: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
 const createProjectMock = vi.mocked(createProject);
+const getCurrentUserMock = vi.mocked(getCurrentUser);
 
 describe("createProjectAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getCurrentUserMock.mockResolvedValue({ uid: "user-1", email: "person@example.com" });
+  });
+
+  it("should return an error state when no user is signed in", async () => {
+    // Arrange
+    getCurrentUserMock.mockResolvedValue(null);
+    const formData = new FormData();
+    formData.set("name", "Launch plan");
+
+    // Act
+    const result = await createProjectAction({ status: "idle" }, formData);
+
+    // Assert
+    expect(result).toEqual({ status: "error", message: "You must be signed in to create a project." });
+    expect(createProjectMock).not.toHaveBeenCalled();
   });
 
   it("should return a validation error for a blank project name", async () => {

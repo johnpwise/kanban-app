@@ -1,6 +1,7 @@
 "use server";
 
 import { moveCard } from "@/lib/services/board";
+import { getCurrentUser } from "@/lib/services/session";
 import { moveCardRequestSchema } from "@/schemas/board";
 import { projectIdSchema } from "@/schemas/project";
 
@@ -17,6 +18,12 @@ export async function moveCardAction(
   projectId: unknown,
   request: unknown,
 ): Promise<MoveCardActionState> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { status: "error", message: "You must be signed in to move a card." };
+  }
+
   const parsedProjectId = projectIdSchema.safeParse(projectId);
   const parsed = moveCardRequestSchema.safeParse(request);
 

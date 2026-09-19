@@ -15,14 +15,15 @@
     "validate:component-layout": "node scripts/validate-component-layout.mjs",
     "test:component": "npm run validate:component-layout && vitest run --config vitest.component.config.mts",
     "test": "npm run test:unit && npm run test:component",
-    "test:integration": "env -u DEBUG firebase emulators:exec --only firestore --project demo-kanban-app-test \"npm run test:integration:run\"",
+    "test:integration": "env -u DEBUG firebase emulators:exec --only firestore,auth --project demo-kanban-app-test \"npm run test:integration:run\"",
     "test:integration:run": "vitest run --config vitest.integration.config.mts",
-    "test:e2e": "env -u DEBUG firebase emulators:exec --only firestore --project demo-kanban-app-e2e \"npm run test:e2e:run\"",
+    "test:e2e": "NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 env -u DEBUG firebase emulators:exec --only firestore,auth --project demo-kanban-app-e2e \"npm run test:e2e:run\"",
     "test:e2e:run": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
+    "firebase": "^12.19.0",
     "firebase-admin": "14.4.0",
     "lucide-react": "^1.45.0",
     "next": "16.3.5",

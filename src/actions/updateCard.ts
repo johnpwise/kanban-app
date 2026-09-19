@@ -1,6 +1,7 @@
 "use server";
 
 import { updateCard } from "@/lib/services/board";
+import { getCurrentUser } from "@/lib/services/session";
 import { updateCardRequestSchema } from "@/schemas/board";
 import { projectIdSchema } from "@/schemas/project";
 
@@ -17,6 +18,12 @@ export async function updateCardAction(
   projectId: unknown,
   request: unknown,
 ): Promise<UpdateCardActionState> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { status: "error", message: "You must be signed in to update a card." };
+  }
+
   const parsedProjectId = projectIdSchema.safeParse(projectId);
   const parsed = updateCardRequestSchema.safeParse(request);
 

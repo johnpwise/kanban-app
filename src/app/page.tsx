@@ -1,16 +1,25 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, Info } from "lucide-react";
 
+import AuthStatus from "@/components/auth-status/AuthStatus";
 import ModeToggle from "@/components/mode-toggle/ModeToggle";
 import ProjectDashboard from "@/components/project-dashboard/ProjectDashboard";
 import { getGreeting } from "@/lib/services/greeting";
 import { listProjects } from "@/lib/services/projects";
+import { getCurrentUser } from "@/lib/services/session";
 import { DARK_MODE_COOKIE_KEY, parseDarkModeCookie } from "@/store/appStore";
 
 import type { Project } from "@/schemas/project";
 
 export default async function HomePage() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/sign-in");
+  }
+
   const [greeting, cookieStore] = await Promise.all([getGreeting(), cookies()]);
   let projects: Project[] = [];
   let loadError: string | undefined;
@@ -33,6 +42,8 @@ export default async function HomePage() {
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Home</h1>
         <p className="text-sm text-slate-600 dark:text-slate-400">{greeting}</p>
       </header>
+
+      <AuthStatus email={user.email ?? "Unknown"} />
 
       <ModeToggle initialIsDarkMode={isDarkMode} />
 

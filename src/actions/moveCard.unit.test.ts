@@ -1,15 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { moveCard } from "@/lib/services/board";
+import { getCurrentUser } from "@/lib/services/session";
 
 import { moveCardAction } from "./moveCard";
 
 vi.mock("@/lib/services/board", () => ({ moveCard: vi.fn() }));
+vi.mock("@/lib/services/session", () => ({ getCurrentUser: vi.fn() }));
 
 const moveCardMock = vi.mocked(moveCard);
+const getCurrentUserMock = vi.mocked(getCurrentUser);
 
 describe("moveCardAction", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCurrentUserMock.mockResolvedValue({ uid: "user-1", email: "person@example.com" });
+  });
+
+  it("should return an error state when no user is signed in", async () => {
+    // Arrange
+    getCurrentUserMock.mockResolvedValue(null);
+
+    // Act
+    const result = await moveCardAction({ status: "idle" }, "project-one", {
+      cardId: "card-1",
+      toColumnId: "done",
+      toIndex: 0,
+    });
+
+    // Assert
+    expect(result.status).toBe("error");
+    expect(moveCardMock).not.toHaveBeenCalled();
+  });
 
   it("should return an error state for an invalid move request", async () => {
     // Arrange

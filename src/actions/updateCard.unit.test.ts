@@ -1,15 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { updateCard } from "@/lib/services/board";
+import { getCurrentUser } from "@/lib/services/session";
 
 import { updateCardAction } from "./updateCard";
 
 vi.mock("@/lib/services/board", () => ({ updateCard: vi.fn() }));
+vi.mock("@/lib/services/session", () => ({ getCurrentUser: vi.fn() }));
 
 const updateCardMock = vi.mocked(updateCard);
+const getCurrentUserMock = vi.mocked(getCurrentUser);
 
 describe("updateCardAction", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCurrentUserMock.mockResolvedValue({ uid: "user-1", email: "person@example.com" });
+  });
+
+  it("should return an error state when no user is signed in", async () => {
+    // Arrange
+    getCurrentUserMock.mockResolvedValue(null);
+
+    // Act
+    const result = await updateCardAction({ status: "idle" }, "project-one", {
+      cardId: "card-1",
+      notes: "Check with design",
+      dueDate: null,
+    });
+
+    // Assert
+    expect(result.status).toBe("error");
+    expect(updateCardMock).not.toHaveBeenCalled();
+  });
 
   it("should return an error state for an invalid update request", async () => {
     // Arrange
