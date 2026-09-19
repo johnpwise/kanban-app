@@ -3,7 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 
-import { auth } from "@/lib/firebase/admin";
+import { getFirebaseAuth } from "@/lib/firebase/admin";
 
 const SESSION_COOKIE_NAME = "session";
 const SESSION_EXPIRES_IN_MS = 1000 * 60 * 60 * 24 * 14;
@@ -14,7 +14,9 @@ export interface SessionUser {
 }
 
 export async function createSessionCookie(idToken: string): Promise<void> {
-  const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn: SESSION_EXPIRES_IN_MS });
+  const sessionCookie = await getFirebaseAuth().createSessionCookie(idToken, {
+    expiresIn: SESSION_EXPIRES_IN_MS,
+  });
   const cookieStore = await cookies();
 
   cookieStore.set(SESSION_COOKIE_NAME, sessionCookie, {
@@ -40,7 +42,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   }
 
   try {
-    const decoded = await auth.verifySessionCookie(sessionCookie, true);
+    const decoded = await getFirebaseAuth().verifySessionCookie(sessionCookie, true);
     return { uid: decoded.uid, email: decoded.email ?? null };
   } catch {
     return null;

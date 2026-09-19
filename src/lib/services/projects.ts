@@ -1,6 +1,6 @@
 import "server-only";
 
-import { firestore } from "@/lib/firebase/admin";
+import { getFirebaseFirestore } from "@/lib/firebase/admin";
 import {
   createProject as createProjectInRepository,
   getProject as getProjectFromRepository,
@@ -8,13 +8,13 @@ import {
 } from "@/lib/repositories/firestoreBoardRepository";
 
 export async function listProjects() {
-  return listProjectsFromRepository(firestore);
+  return listProjectsFromRepository(getFirebaseFirestore());
 }
 
 export async function createProject(name: string) {
-  return createProjectInRepository(firestore, name);
+  return createProjectInRepository(getFirebaseFirestore(), name);
 }
 
 export async function getProject(projectId: string) {
-  return getProjectFromRepository(firestore, projectId);
+  return getProjectFromRepository(getFirebaseFirestore(), projectId);
 }
