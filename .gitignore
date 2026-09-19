@@ -58,6 +58,3 @@ TODO.md
 
 # local development files
 .agent-workflows
-/dist/
-.vinext/
-.wrangler/

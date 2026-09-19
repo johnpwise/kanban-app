@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getFirebaseFirestore } from "@/lib/firebase/admin";
+import { firestore } from "@/lib/firebase/admin";
 import {
   addCard as addCardInRepository,
   deleteCard as deleteCardInRepository,
@@ -12,21 +12,21 @@ import {
 import type { AddCardRequest, DeleteCardRequest, MoveCardRequest, UpdateCardRequest } from "@/schemas/board";
 
 export async function getBoard(projectId: string) {
-  return getProjectBoard(getFirebaseFirestore(), projectId);
+  return getProjectBoard(firestore, projectId);
 }
 
 export async function moveCard(projectId: string, request: MoveCardRequest) {
-  return moveCardInRepository(getFirebaseFirestore(), projectId, request);
+  return moveCardInRepository(firestore, projectId, request);
 }
 
 export async function addCard(projectId: string, request: AddCardRequest) {
-  return addCardInRepository(getFirebaseFirestore(), projectId, request);
+  return addCardInRepository(firestore, projectId, request);
 }
 
 export async function deleteCard(projectId: string, request: DeleteCardRequest) {
-  return deleteCardInRepository(getFirebaseFirestore(), projectId, request);
+  return deleteCardInRepository(firestore, projectId, request);
 }
 
 export async function updateCard(projectId: string, request: UpdateCardRequest) {
-  return updateCardInRepository(getFirebaseFirestore(), projectId, request);
+  return updateCardInRepository(firestore, projectId, request);
 }
