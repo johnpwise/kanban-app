@@ -1,9 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/actions/addCard", () => ({ addCardAction: vi.fn(() => new Promise(() => undefined)) }));
+vi.mock("@/actions/deleteCard", () => ({ deleteCardAction: vi.fn(() => new Promise(() => undefined)) }));
+vi.mock("@/actions/moveCard", () => ({ moveCardAction: vi.fn(() => new Promise(() => undefined)) }));
+vi.mock("@/actions/updateCard", () => ({ updateCardAction: vi.fn(() => new Promise(() => undefined)) }));
 
 import KanbanBoard from "./KanbanBoard";
 
-import { useBoardFilterStore } from "@/store/boardFilterStore";
 import { ADD_CARD_FORM_TEST_IDS } from "@/components/add-card-form/AddCardForm.testIds";
 import { CARD_DETAIL_MODAL_TEST_IDS } from "@/components/card-detail-modal/CardDetailModal.testIds";
 import { KANBAN_CARD_TEST_IDS } from "@/components/kanban-card/KanbanCard.testIds";
@@ -37,13 +41,9 @@ const initialBoard: Board = {
 };
 
 describe("KanbanBoard", () => {
-  beforeEach(() => {
-    useBoardFilterStore.setState({ activeLabel: null });
-  });
-
   it("should move a card into the destination column when its move control changes", async () => {
     // Arrange
-    render(<KanbanBoard initialBoard={initialBoard} />);
+    render(<KanbanBoard projectId="project-one" initialBoard={initialBoard} />);
     const moveSelect = screen.getByTestId(KANBAN_CARD_TEST_IDS.moveSelect("card-1"));
 
     // Act
@@ -58,10 +58,8 @@ describe("KanbanBoard", () => {
 
   it("should hide cards whose label does not match the active filter", () => {
     // Arrange
-    useBoardFilterStore.setState({ activeLabel: "bug" });
-
-    // Act
-    render(<KanbanBoard initialBoard={initialBoard} />);
+    render(<KanbanBoard projectId="project-one" initialBoard={initialBoard} />);
+    fireEvent.change(screen.getByLabelText("Filter by label"), { target: { value: "bug" } });
 
     // Assert
     expect(screen.queryByTestId(KANBAN_CARD_TEST_IDS.card("card-1"))).not.toBeInTheDocument();
@@ -69,7 +67,7 @@ describe("KanbanBoard", () => {
 
   it("should add a new card to a column via its add-card form", async () => {
     // Arrange
-    render(<KanbanBoard initialBoard={initialBoard} />);
+    render(<KanbanBoard projectId="project-one" initialBoard={initialBoard} />);
     const titleInput = screen.getByTestId(ADD_CARD_FORM_TEST_IDS.titleInput("done"));
 
     // Act
@@ -85,7 +83,7 @@ describe("KanbanBoard", () => {
 
   it("should reorder cards within a column when a move-down button is clicked", async () => {
     // Arrange
-    render(<KanbanBoard initialBoard={initialBoard} />);
+    render(<KanbanBoard projectId="project-one" initialBoard={initialBoard} />);
     const todoCards = screen.getByTestId(KANBAN_COLUMN_TEST_IDS.cardList("todo"));
     expect(todoCards).toHaveTextContent(/Ship the demo[\s\S]*Write the docs/);
 
@@ -100,7 +98,7 @@ describe("KanbanBoard", () => {
 
   it("should remove a card from the board when its delete button is clicked", async () => {
     // Arrange
-    render(<KanbanBoard initialBoard={initialBoard} />);
+    render(<KanbanBoard projectId="project-one" initialBoard={initialBoard} />);
     const deleteButton = screen.getByTestId(KANBAN_CARD_TEST_IDS.deleteButton("card-1"));
 
     // Act
@@ -114,7 +112,7 @@ describe("KanbanBoard", () => {
 
   it("should open the card detail modal on double-click and persist notes and a due date on save", async () => {
     // Arrange: add a fresh card so this test doesn't depend on card state left over from other tests
-    render(<KanbanBoard initialBoard={initialBoard} />);
+    render(<KanbanBoard projectId="project-one" initialBoard={initialBoard} />);
     fireEvent.change(screen.getByTestId(ADD_CARD_FORM_TEST_IDS.titleInput("done")), {
       target: { value: "Review the modal copy" },
     });
@@ -149,5 +147,18 @@ describe("KanbanBoard", () => {
       expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.notesInput)).toHaveValue("Check with design");
     });
     expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.dueDateInput)).toHaveValue("2026-02-01");
+  });
+
+  it("should reset label filtering when a different project board mounts", () => {
+    const { rerender } = render(
+      <KanbanBoard key="project-one" projectId="project-one" initialBoard={initialBoard} />,
+    );
+    fireEvent.change(screen.getByLabelText("Filter by label"), { target: { value: "bug" } });
+    expect(screen.queryByTestId(KANBAN_CARD_TEST_IDS.card("card-1"))).not.toBeInTheDocument();
+
+    rerender(<KanbanBoard key="project-two" projectId="project-two" initialBoard={initialBoard} />);
+
+    expect(screen.getByLabelText("Filter by label")).toHaveValue("all");
+    expect(screen.getByTestId(KANBAN_CARD_TEST_IDS.card("card-1"))).toBeInTheDocument();
   });
 });

@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+firestore-debug.log
+firebase-debug.log
 
 # next.js
 /.next/
@@ -32,6 +34,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # firebase credentials (never commit service-account keys)
 serviceAccountKey.json
@@ -39,6 +42,9 @@ serviceAccountKey.json
 
 # persisted local app data
 /.data
+
+# Playwright auth state (test/emulator session only)
+/e2e/.auth
 
 # vercel
 .vercel
@@ -49,3 +55,6 @@ next-env.d.ts
 
 # local TODO lists
 TODO.md
+
+# local development files
+.agent-workflows

@@ -4,12 +4,12 @@ import { startTransition, useActionState, useOptimistic, useState } from "react"
 
 import CardDetailModal from "@/components/card-detail-modal/CardDetailModal";
 import KanbanColumn from "@/components/kanban-column/KanbanColumn";
+import LabelFilter from "@/components/label-filter/LabelFilter";
 
 import { addCardAction } from "@/actions/addCard";
 import { deleteCardAction } from "@/actions/deleteCard";
 import { moveCardAction } from "@/actions/moveCard";
 import { updateCardAction } from "@/actions/updateCard";
-import { useBoardFilterStore } from "@/store/boardFilterStore";
 
 import type {
   AddCardRequest,
@@ -23,6 +23,7 @@ import type {
 import { KANBAN_BOARD_TEST_IDS } from "./KanbanBoard.testIds";
 
 interface KanbanBoardProps {
+  projectId: string;
   initialBoard: Board;
 }
 
@@ -38,16 +39,20 @@ type BoardMutation =
   | { kind: "delete"; request: DeleteCardRequest }
   | { kind: "update"; request: UpdateCardRequest };
 
-async function dispatchBoardMutation(_previousState: BoardActionState, mutation: BoardMutation): Promise<BoardActionState> {
+async function dispatchBoardMutation(
+  projectId: string,
+  _previousState: BoardActionState,
+  mutation: BoardMutation,
+): Promise<BoardActionState> {
   switch (mutation.kind) {
     case "move":
-      return moveCardAction({ status: "idle" }, mutation.request);
+      return moveCardAction({ status: "idle" }, projectId, mutation.request);
     case "add":
-      return addCardAction({ status: "idle" }, mutation.request);
+      return addCardAction({ status: "idle" }, projectId, mutation.request);
     case "delete":
-      return deleteCardAction({ status: "idle" }, mutation.request);
+      return deleteCardAction({ status: "idle" }, projectId, mutation.request);
     case "update":
-      return updateCardAction({ status: "idle" }, mutation.request);
+      return updateCardAction({ status: "idle" }, projectId, mutation.request);
   }
 }
 
@@ -145,11 +150,14 @@ function applyOptimisticMutation(board: Board, mutation: BoardMutation): Board {
 
 const initialActionState: BoardActionState = { status: "idle" };
 
-export default function KanbanBoard({ initialBoard }: KanbanBoardProps) {
-  const [actionState, dispatchMutation] = useActionState(dispatchBoardMutation, initialActionState);
+export default function KanbanBoard({ projectId, initialBoard }: KanbanBoardProps) {
+  const [actionState, dispatchMutation] = useActionState(
+    dispatchBoardMutation.bind(null, projectId),
+    initialActionState,
+  );
   const confirmedBoard = actionState.board ?? initialBoard;
   const [optimisticBoard, applyOptimistic] = useOptimistic(confirmedBoard, applyOptimisticMutation);
-  const activeLabel = useBoardFilterStore((state) => state.activeLabel);
+  const [activeLabel, setActiveLabel] = useState<CardLabel | null>(null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
   function handleMoveCard(cardId: string, toColumnId: string) {
@@ -218,6 +226,7 @@ export default function KanbanBoard({ initialBoard }: KanbanBoardProps) {
 
   return (
     <div data-id={KANBAN_BOARD_TEST_IDS.board} className="space-y-3">
+      <LabelFilter activeLabel={activeLabel} onChange={setActiveLabel} />
       <div className="flex flex-wrap gap-3.5">
         {optimisticBoard.columns.map((column) => {
           const cards = column.cardIds
