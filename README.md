@@ -58,3 +58,22 @@ You can initiate the Workflow Orchestrator by starting your prompt with:
 
 - Use agent spec: Delivery-Engineer
 - .github/agents/agents-core/agent-docs/prompts/delivery-engineer-auto-loop.prompt.md
+
+## Cloudflare deployment
+
+The Cloudflare Worker build is produced by vinext. Configure the connected Worker under
+**Settings → Build** with:
+
+- Production branch: `main`
+- Build command: `npm run build:vinext`
+- Deploy command: `npm run deploy:cloudflare`
+- Non-production branch deploy command: `npm run preview:cloudflare`
+- Builds for non-production branches: enabled (the `develop` branch is uploaded as a preview version)
+
+Both deploy commands use vinext's generated `dist/server/wrangler.json`. The production command
+promotes the `main` build; the non-production command uploads a version without changing production.
+
+Before the first deploy, add `FIREBASE_SERVICE_ACCOUNT_JSON` as an encrypted Worker secret under
+**Settings → Variables and Secrets**. Its value must be the complete Firebase service-account JSON
+object. Wrangler validates that the secret exists for both production deploys and preview uploads;
+do not configure `GOOGLE_APPLICATION_CREDENTIALS`, because a Worker cannot read a local file path.
