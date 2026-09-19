@@ -1,7 +1,9 @@
 "use server";
 
 import { updateCard } from "@/lib/services/board";
+import { getCurrentUser } from "@/lib/services/session";
 import { updateCardRequestSchema } from "@/schemas/board";
+import { projectIdSchema } from "@/schemas/project";
 
 import type { Board } from "@/schemas/board";
 
@@ -13,9 +15,21 @@ export interface UpdateCardActionState {
 
 export async function updateCardAction(
   _previousState: UpdateCardActionState,
+  projectId: unknown,
   request: unknown,
 ): Promise<UpdateCardActionState> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { status: "error", message: "You must be signed in to update a card." };
+  }
+
+  const parsedProjectId = projectIdSchema.safeParse(projectId);
   const parsed = updateCardRequestSchema.safeParse(request);
+
+  if (!parsedProjectId.success) {
+    return { status: "error", message: "Invalid project." };
+  }
 
   if (!parsed.success) {
     return {
@@ -25,10 +39,11 @@ export async function updateCardAction(
   }
 
   try {
-    const board = await updateCard(parsed.data);
+    const board = await updateCard(parsedProjectId.data, parsed.data);
 
     return { status: "success", board };
-  } catch {
+  } catch (error) {
+    console.error("Failed to update card.", error);
     return {
       status: "error",
       message: "Could not update the card. Please try again.",

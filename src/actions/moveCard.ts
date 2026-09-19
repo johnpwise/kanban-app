@@ -1,7 +1,9 @@
 "use server";
 
 import { moveCard } from "@/lib/services/board";
+import { getCurrentUser } from "@/lib/services/session";
 import { moveCardRequestSchema } from "@/schemas/board";
+import { projectIdSchema } from "@/schemas/project";
 
 import type { Board } from "@/schemas/board";
 
@@ -13,9 +15,21 @@ export interface MoveCardActionState {
 
 export async function moveCardAction(
   _previousState: MoveCardActionState,
+  projectId: unknown,
   request: unknown,
 ): Promise<MoveCardActionState> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return { status: "error", message: "You must be signed in to move a card." };
+  }
+
+  const parsedProjectId = projectIdSchema.safeParse(projectId);
   const parsed = moveCardRequestSchema.safeParse(request);
+
+  if (!parsedProjectId.success) {
+    return { status: "error", message: "Invalid project." };
+  }
 
   if (!parsed.success) {
     return {
@@ -25,10 +39,11 @@ export async function moveCardAction(
   }
 
   try {
-    const board = await moveCard(parsed.data);
+    const board = await moveCard(parsedProjectId.data, parsed.data);
 
     return { status: "success", board };
-  } catch {
+  } catch (error) {
+    console.error("Failed to move card.", error);
     return {
       status: "error",
       message: "Could not move the card. Please try again.",

@@ -1,17 +1,11 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   addCardToBoard,
   deleteCardFromBoard,
   moveCardInBoard,
-  readPersistedBoard,
   updateCardInBoard,
-  writePersistedBoard,
-} from "./board";
+} from "@/lib/domain/board";
 
 import type { Board } from "@/schemas/board";
 
@@ -203,54 +197,5 @@ describe("updateCardInBoard", () => {
 
     // Assert
     expect(updateMissingCard).toThrow('Card "missing-card" was not found on the board.');
-  });
-});
-
-describe("board persistence", () => {
-  let dir: string | null = null;
-
-  afterEach(async () => {
-    if (dir) {
-      await rm(dir, { recursive: true, force: true });
-      dir = null;
-    }
-  });
-
-  it("should return null when no board has been persisted yet", async () => {
-    // Arrange
-    dir = await mkdtemp(path.join(tmpdir(), "board-persistence-"));
-    const filePath = path.join(dir, "board.json");
-
-    // Act
-    const result = await readPersistedBoard(filePath);
-
-    // Assert
-    expect(result).toBeNull();
-  });
-
-  it("should round-trip a board through the filesystem, creating parent directories as needed", async () => {
-    // Arrange
-    dir = await mkdtemp(path.join(tmpdir(), "board-persistence-"));
-    const filePath = path.join(dir, "nested", "board.json");
-
-    // Act
-    await writePersistedBoard(filePath, board);
-    const result = await readPersistedBoard(filePath);
-
-    // Assert
-    expect(result).toEqual(board);
-  });
-
-  it("should return null when the persisted file does not contain a valid board", async () => {
-    // Arrange
-    dir = await mkdtemp(path.join(tmpdir(), "board-persistence-"));
-    const filePath = path.join(dir, "board.json");
-    await writeFile(filePath, JSON.stringify({ columns: "not-an-array" }), "utf-8");
-
-    // Act
-    const result = await readPersistedBoard(filePath);
-
-    // Assert
-    expect(result).toBeNull();
   });
 });

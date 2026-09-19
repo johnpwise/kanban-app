@@ -1,0 +1,9 @@
+[mcp_servers.firebase]
+command = "npx"
+args = ["-y", "firebase-tools@latest", "mcp", "--only", "auth,firestore"]
+
+[mcp_servers.github]
+url = "https://api.githubcopilot.com/mcp/"
+auth = "oauth"
+http_headers = { "X-MCP-Toolsets" = "context,repos,pull_requests" }
+default_tools_approval_mode = "writes"

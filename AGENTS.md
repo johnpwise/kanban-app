@@ -31,6 +31,24 @@ This app inherits shared workflow rules and Next.js stack guidance from:
 - `integration`: `npm run test`
 - `e2e`: `npm run test:e2e`
 
+## Firebase / Firestore safety
+
+A Firebase MCP server (Auth + Firestore only, via `firebase-tools mcp --only auth,firestore`) is registered project-scoped for this repo — see `.mcp.json` (Claude Code) and `.codex/config.toml` (Codex). It authenticates as the developer's own `firebase login` session, not a repo-held credential.
+
+- Only one Firebase project is linked to this repo (`.firebaserc` → `kanban-app-fa4b7`); there is no dev/prod split. Treat it as production-equivalent.
+- Never perform Firestore writes/deletes, Firebase Auth user mutations, Security Rules deploys, or any `firebase deploy` — via the MCP tools or the CLI — without explicit, in-the-moment user approval for that specific action.
+- Read-only Firestore/Auth inspection (reading documents, listing users, checking rules) does not require approval each time.
+- The frontend uses Firebase Auth (email/password) for sign-in. Session state is a server-verified, `httpOnly` cookie (`src/lib/services/session.ts`, checked via `firebase-admin`'s `verifySessionCookie`) — never a client-trusted value. The client Firebase SDK (`src/lib/firebase/client.ts`) only performs the credential check in the browser; it is not the source of truth for who's signed in on the server. Auth user mutations (creating/deleting/disabling users, changing custom claims) fall under the same "no writes without explicit approval" rule above.
+
+## GitHub safety
+
+A GitHub MCP server is registered project-scoped for this repo (hosted GitHub MCP at `https://api.githubcopilot.com/mcp/`, toolsets limited to `context,repos,pull_requests`) — see `.mcp.json` (Claude Code) and `.codex/config.toml` (Codex). Both authenticate via the developer's own GitHub session (OAuth for Codex, a `gh`-derived token for Claude Code), not a repo-held credential.
+
+- Scope is this repo (`johnpwise/kanban-app`) only.
+- Write-capable actions (pushing commits, merging/closing PRs, force-push, branch deletion, repo/workflow-file mutation) currently require explicit, in-the-moment user approval — Codex enforces this via `default_tools_approval_mode = "writes"`; Claude Code's own tool-approval prompting provides the equivalent backing.
+- Read-only actions (listing/reading issues and PRs, reading file contents and diffs, checking Actions run status) don't require approval each time.
+- This approval gate is a deliberate, current-stage checkpoint, not a permanent design: the direction is toward a cloud-based workflow where a ticket filed on this app's own kanban board can be carried through implementation, review, and deployment autonomously. Loosening this gate (e.g. auto-approving writes, or running in a cloud environment without per-action sign-off) is an explicit future decision, not one to make unilaterally by relaxing this file.
+
 ### Working model
 
 Agents should behave like junior developers being trained into this workflow.

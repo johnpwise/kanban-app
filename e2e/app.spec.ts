@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-import { HOME_PAGE_TEST_IDS } from "../src/app/HomePage.testIds";
 import { MODE_TOGGLE_TEST_IDS } from "../src/components/mode-toggle/ModeToggle.testIds";
+import { PROJECT_DASHBOARD_TEST_IDS } from "../src/components/project-dashboard/ProjectDashboard.testIds";
 
 test.describe("app shell", () => {
   test("should navigate from home to about and back", async ({ page }) => {
@@ -22,14 +22,11 @@ test.describe("app shell", () => {
     await expect(page.getByRole("heading", { level: 1, name: "About" })).toBeVisible();
   });
 
-  test("should show the kanban board's card count badge on the home page", async ({ page }) => {
-    // Arrange
-
-    // Act
+  test("should show the project creation form on the home page", async ({ page }) => {
     await page.goto("/");
 
-    // Assert
-    await expect(page.getByTestId(HOME_PAGE_TEST_IDS.boardCardCount)).toHaveText(/^\d+ cards?$/);
+    await expect(page.getByTestId(PROJECT_DASHBOARD_TEST_IDS.form)).toBeVisible();
+    await expect(page.getByLabel("Project name")).toBeEnabled();
   });
 
   test("should submit the subscribe form and show a success message", async ({ page }) => {
