@@ -59,6 +59,10 @@ describe("moveCardAction", () => {
           createdAt: "2026-09-19T09:30:00.000Z",
           notes: null,
           dueDate: null,
+          prompt: "Do the thing.",
+          executionStatus: "not_started",
+          createdBy: "user-1",
+          updatedAt: "2026-09-19T09:30:00.000Z",
         },
       },
     });

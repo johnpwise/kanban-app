@@ -5,7 +5,14 @@ import { boardSchema } from "@/schemas/board";
 import { projectNameSchema, projectSchema } from "@/schemas/project";
 
 import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
-import type { AddCardRequest, Board, DeleteCardRequest, MoveCardRequest, UpdateCardRequest } from "@/schemas/board";
+import type {
+  AddCardRequest,
+  Board,
+  DeleteCardRequest,
+  ExecutionStatus,
+  MoveCardRequest,
+  UpdateCardRequest,
+} from "@/schemas/board";
 import type { Project } from "@/schemas/project";
 
 const DEFAULT_COLUMNS = [
@@ -14,24 +21,29 @@ const DEFAULT_COLUMNS = [
   { id: "done", title: "Done", position: 2 },
 ] as const;
 
+const DEMO_CARD_CREATED_BY = "demo-seed";
+
 const DEMO_CARDS = [
   {
     id: "card-1",
     title: "Design the board schema",
     label: "feature",
     createdAt: "2026-01-05T09:00:00.000Z",
+    prompt: "Design the Firestore board schema for the kanban app.",
   },
   {
     id: "card-2",
     title: "Fix the drag ghost image",
     label: "bug",
     createdAt: "2026-01-06T09:00:00.000Z",
+    prompt: "Fix the drag ghost image so it matches the card being dragged.",
   },
   {
     id: "card-3",
     title: "Wire up CI",
     label: "chore",
     createdAt: "2026-01-07T09:00:00.000Z",
+    prompt: "Wire up continuous integration for the kanban app repo.",
   },
 ] as const;
 
@@ -52,6 +64,10 @@ interface CardDocument {
   createdAt: Timestamp;
   notes: string | null;
   dueDate: string | null;
+  prompt: string;
+  executionStatus: ExecutionStatus;
+  createdBy: string;
+  updatedAt: Timestamp;
 }
 
 export class ProjectNotFoundError extends Error {
@@ -137,12 +153,18 @@ export async function seedDemoProject(firestore: Firestore): Promise<Project> {
     }
 
     for (const card of DEMO_CARDS) {
+      const cardCreatedAt = Timestamp.fromDate(new Date(card.createdAt));
+
       transaction.create(reference.collection("cards").doc(card.id), {
         title: card.title,
         label: card.label,
-        createdAt: Timestamp.fromDate(new Date(card.createdAt)),
+        createdAt: cardCreatedAt,
         notes: null,
         dueDate: null,
+        prompt: card.prompt,
+        executionStatus: "not_started",
+        createdBy: DEMO_CARD_CREATED_BY,
+        updatedAt: cardCreatedAt,
       } satisfies CardDocument);
     }
 
@@ -191,6 +213,10 @@ export async function getProjectBoard(firestore: Firestore, projectId: string): 
           createdAt: data.createdAt.toDate().toISOString(),
           notes: data.notes ?? null,
           dueDate: data.dueDate ?? null,
+          prompt: data.prompt,
+          executionStatus: data.executionStatus,
+          createdBy: data.createdBy,
+          updatedAt: data.updatedAt.toDate().toISOString(),
         },
       ];
     }),
@@ -203,6 +229,7 @@ export async function addCard(
   firestore: Firestore,
   projectId: string,
   request: AddCardRequest,
+  createdBy: string,
 ): Promise<Board> {
   const reference = projectReference(firestore, projectId);
   const columnReference = reference.collection("columns").doc(request.columnId);
@@ -225,12 +252,18 @@ export async function addCard(
       throw new Error(`Card "${request.cardId}" already exists on the board.`);
     }
 
+    const now = Timestamp.now();
+
     transaction.create(cardReference, {
       title: request.title,
       label: request.label,
-      createdAt: Timestamp.now(),
+      createdAt: now,
       notes: null,
       dueDate: null,
+      prompt: request.prompt,
+      executionStatus: "not_started",
+      createdBy,
+      updatedAt: now,
     } satisfies CardDocument);
     const column = columnSnapshot.data() as ColumnDocument;
     transaction.update(columnReference, { cardIds: [...column.cardIds, request.cardId] });
@@ -274,6 +307,10 @@ export async function moveCard(
               createdAt: data.createdAt.toDate().toISOString(),
               notes: data.notes ?? null,
               dueDate: data.dueDate ?? null,
+              prompt: data.prompt,
+              executionStatus: data.executionStatus,
+              createdBy: data.createdBy,
+              updatedAt: data.updatedAt.toDate().toISOString(),
             },
           ];
         }),
@@ -307,7 +344,11 @@ export async function updateCard(
       throw new Error(`Card "${request.cardId}" was not found on the board.`);
     }
 
-    transaction.update(cardReference, { notes: request.notes, dueDate: request.dueDate });
+    transaction.update(cardReference, {
+      notes: request.notes,
+      dueDate: request.dueDate,
+      updatedAt: Timestamp.now(),
+    });
   });
 
   return requireUpdatedBoard(firestore, projectId);
@@ -345,6 +386,7 @@ export async function deleteCard(
           id: request.cardId,
           ...(cardSnapshot.data() as CardDocument),
           createdAt: (cardSnapshot.data() as CardDocument).createdAt.toDate().toISOString(),
+          updatedAt: (cardSnapshot.data() as CardDocument).updatedAt.toDate().toISOString(),
         },
       },
     });

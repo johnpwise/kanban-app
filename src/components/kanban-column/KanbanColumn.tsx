@@ -15,7 +15,7 @@ interface KanbanColumnProps {
   columns: Column[];
   onDropCard: (cardId: string, toColumnId: string) => void;
   onMoveCard: (cardId: string, toColumnId: string) => void;
-  onAddCard: (columnId: string, title: string, label: CardLabel | null) => void;
+  onAddCard: (columnId: string, title: string, label: CardLabel | null, prompt: string) => void;
   onDeleteCard: (cardId: string) => void;
   onReorderCard: (cardId: string, direction: "up" | "down") => void;
   onOpenCard: (cardId: string) => void;
@@ -56,7 +56,10 @@ export default function KanbanColumn({
         <span className="h-2 w-2 rounded-full bg-indigo-500" aria-hidden="true" />
         {column.title} <span className="text-slate-400 dark:text-slate-500">({cards.length})</span>
       </h2>
-      <AddCardForm columnId={column.id} onAddCard={(title, label) => onAddCard(column.id, title, label)} />
+      <AddCardForm
+        columnId={column.id}
+        onAddCard={(title, label, prompt) => onAddCard(column.id, title, label, prompt)}
+      />
       <div data-id={KANBAN_COLUMN_TEST_IDS.cardList(column.id)} className="flex flex-col gap-2.5">
         {cards.map((card) => {
           const cardIndex = column.cardIds.indexOf(card.id);

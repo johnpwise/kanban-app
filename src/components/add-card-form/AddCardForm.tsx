@@ -10,26 +10,30 @@ import { ADD_CARD_FORM_TEST_IDS } from "./AddCardForm.testIds";
 
 interface AddCardFormProps {
   columnId: string;
-  onAddCard: (title: string, label: CardLabel | null) => void;
+  onAddCard: (title: string, label: CardLabel | null, prompt: string) => void;
 }
 
 export default function AddCardForm({ columnId, onAddCard }: AddCardFormProps) {
   const [title, setTitle] = useState("");
   const [label, setLabel] = useState<CardLabel | "">("");
+  const [prompt, setPrompt] = useState("");
   const titleInputId = useId();
   const labelSelectId = useId();
+  const promptInputId = useId();
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedTitle = title.trim();
+    const trimmedPrompt = prompt.trim();
 
-    if (!trimmedTitle) {
+    if (!trimmedTitle || !trimmedPrompt) {
       return;
     }
 
-    onAddCard(trimmedTitle, label === "" ? null : label);
+    onAddCard(trimmedTitle, label === "" ? null : label, trimmedPrompt);
     setTitle("");
     setLabel("");
+    setPrompt("");
   }
 
   return (
@@ -67,6 +71,20 @@ export default function AddCardForm({ columnId, onAddCard }: AddCardFormProps) {
           <option value="feature">Feature</option>
           <option value="chore">Chore</option>
         </select>
+      </div>
+      <div className="flex w-full flex-col gap-1">
+        <label htmlFor={promptInputId} className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          ADA prompt
+        </label>
+        <textarea
+          id={promptInputId}
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          data-id={ADD_CARD_FORM_TEST_IDS.promptInput(columnId)}
+          rows={2}
+          className="rounded-md border-slate-300 px-2 py-1 text-xs shadow-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-900"
+          placeholder="Describe what the agent should do"
+        />
       </div>
       <button
         type="submit"

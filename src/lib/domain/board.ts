@@ -32,7 +32,7 @@ export function moveCardInBoard(board: Board, request: MoveCardRequest): Board {
   return { ...board, columns };
 }
 
-export function addCardToBoard(board: Board, request: AddCardRequest): Board {
+export function addCardToBoard(board: Board, request: AddCardRequest, createdBy: string): Board {
   if (board.cardsById[request.cardId]) {
     throw new Error(`Card "${request.cardId}" already exists on the board.`);
   }
@@ -46,13 +46,18 @@ export function addCardToBoard(board: Board, request: AddCardRequest): Board {
   const columns = board.columns.map((column) =>
     column.id === request.columnId ? { ...column, cardIds: [...column.cardIds, request.cardId] } : column,
   );
+  const now = new Date().toISOString();
   const card = {
     id: request.cardId,
     title: request.title,
     label: request.label,
-    createdAt: new Date().toISOString(),
+    createdAt: now,
     notes: null,
     dueDate: null,
+    prompt: request.prompt,
+    executionStatus: "not_started" as const,
+    createdBy,
+    updatedAt: now,
   };
 
   return { columns, cardsById: { ...board.cardsById, [request.cardId]: card } };
@@ -69,7 +74,12 @@ export function updateCardInBoard(board: Board, request: UpdateCardRequest): Boa
     ...board,
     cardsById: {
       ...board.cardsById,
-      [request.cardId]: { ...card, notes: request.notes, dueDate: request.dueDate },
+      [request.cardId]: {
+        ...card,
+        notes: request.notes,
+        dueDate: request.dueDate,
+        updatedAt: new Date().toISOString(),
+      },
     },
   };
 }

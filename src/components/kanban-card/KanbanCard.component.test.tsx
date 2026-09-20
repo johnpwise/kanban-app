@@ -19,6 +19,10 @@ describe("KanbanCard", () => {
       createdAt: "2026-01-05T09:00:00.000Z",
       notes: null,
       dueDate: null,
+      prompt: "Ship the demo build.",
+      executionStatus: "not_started" as const,
+      createdBy: "user-1",
+      updatedAt: "2026-01-05T09:00:00.000Z",
     };
 
     // Act
@@ -43,7 +47,18 @@ describe("KanbanCard", () => {
 
   it("should call onMove with the destination column when the move control changes", () => {
     // Arrange
-    const card = { id: "card-1", title: "Ship the demo", label: null, createdAt: "2026-01-05T09:00:00.000Z", notes: null, dueDate: null };
+    const card = {
+      id: "card-1",
+      title: "Ship the demo",
+      label: null,
+      createdAt: "2026-01-05T09:00:00.000Z",
+      notes: null,
+      dueDate: null,
+      prompt: "Ship the demo build.",
+      executionStatus: "not_started" as const,
+      createdBy: "user-1",
+      updatedAt: "2026-01-05T09:00:00.000Z",
+    };
     const onMove = vi.fn();
     render(
       <KanbanCard
@@ -69,7 +84,18 @@ describe("KanbanCard", () => {
 
   it("should call onDelete when the delete button is clicked", () => {
     // Arrange
-    const card = { id: "card-1", title: "Ship the demo", label: null, createdAt: "2026-01-05T09:00:00.000Z", notes: null, dueDate: null };
+    const card = {
+      id: "card-1",
+      title: "Ship the demo",
+      label: null,
+      createdAt: "2026-01-05T09:00:00.000Z",
+      notes: null,
+      dueDate: null,
+      prompt: "Ship the demo build.",
+      executionStatus: "not_started" as const,
+      createdBy: "user-1",
+      updatedAt: "2026-01-05T09:00:00.000Z",
+    };
     const onDelete = vi.fn();
     render(
       <KanbanCard
@@ -94,7 +120,18 @@ describe("KanbanCard", () => {
 
   it("should call onReorder with the direction when a move-up or move-down button is clicked", () => {
     // Arrange
-    const card = { id: "card-1", title: "Ship the demo", label: null, createdAt: "2026-01-05T09:00:00.000Z", notes: null, dueDate: null };
+    const card = {
+      id: "card-1",
+      title: "Ship the demo",
+      label: null,
+      createdAt: "2026-01-05T09:00:00.000Z",
+      notes: null,
+      dueDate: null,
+      prompt: "Ship the demo build.",
+      executionStatus: "not_started" as const,
+      createdBy: "user-1",
+      updatedAt: "2026-01-05T09:00:00.000Z",
+    };
     const onReorder = vi.fn();
     render(
       <KanbanCard
@@ -121,7 +158,18 @@ describe("KanbanCard", () => {
 
   it("should disable the move-up button when canMoveUp is false and the move-down button when canMoveDown is false", () => {
     // Arrange
-    const card = { id: "card-1", title: "Ship the demo", label: null, createdAt: "2026-01-05T09:00:00.000Z", notes: null, dueDate: null };
+    const card = {
+      id: "card-1",
+      title: "Ship the demo",
+      label: null,
+      createdAt: "2026-01-05T09:00:00.000Z",
+      notes: null,
+      dueDate: null,
+      prompt: "Ship the demo build.",
+      executionStatus: "not_started" as const,
+      createdBy: "user-1",
+      updatedAt: "2026-01-05T09:00:00.000Z",
+    };
 
     // Act
     render(
@@ -145,7 +193,18 @@ describe("KanbanCard", () => {
 
   it("should call onOpenCard when the card is double-clicked", () => {
     // Arrange
-    const card = { id: "card-1", title: "Ship the demo", label: null, createdAt: "2026-01-05T09:00:00.000Z", notes: null, dueDate: null };
+    const card = {
+      id: "card-1",
+      title: "Ship the demo",
+      label: null,
+      createdAt: "2026-01-05T09:00:00.000Z",
+      notes: null,
+      dueDate: null,
+      prompt: "Ship the demo build.",
+      executionStatus: "not_started" as const,
+      createdBy: "user-1",
+      updatedAt: "2026-01-05T09:00:00.000Z",
+    };
     const onOpenCard = vi.fn();
     render(
       <KanbanCard
@@ -170,7 +229,18 @@ describe("KanbanCard", () => {
 
   it("should call onOpenCard when Enter is pressed on the focused card", () => {
     // Arrange
-    const card = { id: "card-1", title: "Ship the demo", label: null, createdAt: "2026-01-05T09:00:00.000Z", notes: null, dueDate: null };
+    const card = {
+      id: "card-1",
+      title: "Ship the demo",
+      label: null,
+      createdAt: "2026-01-05T09:00:00.000Z",
+      notes: null,
+      dueDate: null,
+      prompt: "Ship the demo build.",
+      executionStatus: "not_started" as const,
+      createdBy: "user-1",
+      updatedAt: "2026-01-05T09:00:00.000Z",
+    };
     const onOpenCard = vi.fn();
     render(
       <KanbanCard
