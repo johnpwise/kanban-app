@@ -10,6 +10,10 @@ export const dispatchAdaExecutionRequest = onDocumentCreated(
   {
     document: "executionRequests/{executionRequestId}",
     region: "europe-west2",
+    // Transient publish failures are rethrown by handleExecutionRequestCreated so Firebase
+    // retries the event; without this the event is dropped after a single failed attempt.
+    // https://firebase.google.com/docs/functions/retries
+    retry: true,
   },
   handleExecutionRequestCreated,
 );
