@@ -1,0 +1,62 @@
+import { parseExecutorConfig } from "./config";
+import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
+
+import type { ExecutionRunRepository } from "./executionRunRepository";
+
+export interface ExecutorLogger {
+  info(message: string, fields?: Record<string, unknown>): void;
+  error(message: string, fields?: Record<string, unknown>): void;
+}
+
+export type ExecutorOutcome = { ok: true } | { ok: false; reason: string };
+
+export interface RunExecutorParams {
+  env: Record<string, string | undefined>;
+  repository: ExecutionRunRepository;
+  logger: ExecutorLogger;
+}
+
+/**
+ * Composes validate-environment -> load -> validate -> log -> outcome for the current minimal
+ * shell behaviour. Every failure path returns `{ ok: false }` rather than throwing: a Cloud Run
+ * Job container communicates failure to its caller purely through its process exit code (see
+ * `main.ts`), so there is no redelivery concept here to preserve by rethrowing.
+ */
+export async function runExecutor({ env, repository, logger }: RunExecutorParams): Promise<ExecutorOutcome> {
+  let executionRunId: string;
+  try {
+    executionRunId = parseExecutorConfig(env).executionRunId;
+  } catch {
+    logger.error("Invalid or missing executor environment configuration.");
+    return { ok: false, reason: "invalid_config" };
+  }
+
+  let data: unknown;
+  try {
+    data = await repository.loadExecutionRunData(executionRunId);
+  } catch {
+    logger.error("Transient failure loading the execution run.", { executionRunId });
+    return { ok: false, reason: "repository_error" };
+  }
+
+  if (data === undefined) {
+    logger.error("Execution run not found.", { executionRunId });
+    return { ok: false, reason: "not_found" };
+  }
+
+  let run;
+  try {
+    run = parseExecutionRunDocument(executionRunId, data);
+  } catch {
+    logger.error("Execution run failed validation.", { executionRunId });
+    return { ok: false, reason: "invalid_run" };
+  }
+
+  logger.info("Accepted execution run loaded and validated successfully.", {
+    executionRequestId: run.executionRequestId,
+    correlationId: run.correlationId,
+    projectId: run.projectId,
+    cardId: run.cardId,
+  });
+  return { ok: true };
+}

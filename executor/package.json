@@ -1,0 +1,28 @@
+{
+  "name": "kanban-app-executor",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "22"
+  },
+  "main": "lib/main.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test:unit": "vitest run --config vitest.unit.config.mts",
+    "test:integration:run": "vitest run --config vitest.integration.config.mts"
+  },
+  "dependencies": {
+    "firebase-admin": "14.4.0",
+    "zod": "^4.6.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9",
+    "@types/node": "^22",
+    "eslint": "^9",
+    "typescript": "^5",
+    "typescript-eslint": "^8",
+    "vitest": "^5.0.0"
+  }
+}
