@@ -10,6 +10,8 @@ import type { Page } from "@playwright/test";
 async function createProject(page: Page, name: string) {
   await page.goto("/");
   await page.getByLabel("Project name").fill(name);
+  await page.getByLabel("GitHub repository").fill("johnpwise/kanban-app");
+  await page.getByLabel("Default branch").fill("develop");
   await page.getByRole("button", { name: "Create project" }).click();
   await expect(page).toHaveURL(/\/projects\/[^/]+$/);
   return page.url().split("/").at(-1) as string;
@@ -20,6 +22,7 @@ async function addCard(page: Page, columnId: string, title: string, label?: "bug
   if (label) {
     await page.getByTestId(ADD_CARD_FORM_TEST_IDS.labelSelect(columnId)).selectOption(label);
   }
+  await page.getByTestId(ADD_CARD_FORM_TEST_IDS.promptInput(columnId)).fill(`Prompt for ${title}`);
   await page.getByTestId(ADD_CARD_FORM_TEST_IDS.submit(columnId)).click();
   await expect(page.getByTestId(KANBAN_COLUMN_TEST_IDS.cardList(columnId)).getByText(title)).toBeVisible();
 }
