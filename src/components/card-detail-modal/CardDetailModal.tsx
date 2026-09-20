@@ -4,19 +4,42 @@ import { useEffect, useId, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Calendar, Check, X } from "lucide-react";
 
-import type { Card } from "@/schemas/board";
+import type { Card, ExecutionStatus } from "@/schemas/board";
 
 import { CARD_DETAIL_MODAL_TEST_IDS } from "./CardDetailModal.testIds";
+
+const EXECUTION_STATUS_LABELS: Record<ExecutionStatus, string> = {
+  not_started: "Not Started",
+  queued: "Queued",
+  planning: "Planning",
+  implementing: "Implementing",
+  testing: "Testing",
+  creating_pr: "Creating PR",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
 
 interface CardDetailModalProps {
   card: Card | null;
   onClose: () => void;
   onSave: (cardId: string, notes: string, dueDate: string | null) => void;
+  onStartExecution: (cardId: string) => void;
+  isStartingExecution: boolean;
+  startExecutionError: string | null;
 }
 
-export default function CardDetailModal({ card, onClose, onSave }: CardDetailModalProps) {
+export default function CardDetailModal({
+  card,
+  onClose,
+  onSave,
+  onStartExecution,
+  isStartingExecution,
+  startExecutionError,
+}: CardDetailModalProps) {
   const [notes, setNotes] = useState(() => card?.notes ?? "");
   const [dueDate, setDueDate] = useState(() => card?.dueDate ?? "");
+  const [hasAttemptedStart, setHasAttemptedStart] = useState(false);
   const notesInputId = useId();
   const dueDateInputId = useId();
 
@@ -53,6 +76,17 @@ export default function CardDetailModal({ card, onClose, onSave }: CardDetailMod
     event.stopPropagation();
   }
 
+  function handleStartExecutionClick() {
+    if (!card) {
+      return;
+    }
+
+    setHasAttemptedStart(true);
+    onStartExecution(card.id);
+  }
+
+  const showStartExecutionError = hasAttemptedStart && !isStartingExecution && startExecutionError !== null;
+
   return (
     <div
       onClick={onClose}
@@ -85,6 +119,44 @@ export default function CardDetailModal({ card, onClose, onSave }: CardDetailMod
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
+        </div>
+
+        <div className="flex flex-col gap-1.5 rounded-lg border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">ADA Prompt</span>
+            <span
+              data-id={CARD_DETAIL_MODAL_TEST_IDS.executionStatusBadge}
+              aria-live="polite"
+              className="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"
+            >
+              {EXECUTION_STATUS_LABELS[card.executionStatus]}
+            </span>
+          </div>
+          <p data-id={CARD_DETAIL_MODAL_TEST_IDS.promptDisplay} className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">
+            {card.prompt}
+          </p>
+          {card.executionStatus === "not_started" && (
+            <div className="flex flex-col gap-1.5 pt-1">
+              <button
+                type="button"
+                onClick={handleStartExecutionClick}
+                disabled={isStartingExecution}
+                data-id={CARD_DETAIL_MODAL_TEST_IDS.startExecutionButton}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isStartingExecution ? "Starting…" : "Start ADA Work"}
+              </button>
+              {showStartExecutionError && (
+                <p
+                  role="alert"
+                  data-id={CARD_DETAIL_MODAL_TEST_IDS.startExecutionError}
+                  className="text-xs text-red-600 dark:text-red-400"
+                >
+                  {startExecutionError}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">

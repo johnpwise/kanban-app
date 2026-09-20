@@ -35,30 +35,65 @@ export default function ProjectDashboard({ projects, loadError }: ProjectDashboa
       <form
         action={formAction}
         data-id={PROJECT_DASHBOARD_TEST_IDS.form}
-        className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white/80 p-5 shadow-sm sm:flex-row sm:items-end dark:border-slate-800 dark:bg-slate-900/60"
+        className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white/80 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"
       >
-        <div className="flex-1 space-y-1.5">
-          <label htmlFor="project-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Project name
-          </label>
-          <input
-            id="project-name"
-            name="name"
-            required
-            maxLength={80}
-            disabled={isPending}
-            aria-invalid={hasActionError}
-            aria-describedby={hasActionError ? "project-create-status" : undefined}
-            data-id={PROJECT_DASHBOARD_TEST_IDS.nameInput}
-            className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
-            placeholder="e.g. Website launch"
-          />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <label htmlFor="project-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Project name
+            </label>
+            <input
+              id="project-name"
+              name="name"
+              required
+              maxLength={80}
+              disabled={isPending}
+              aria-invalid={hasActionError}
+              aria-describedby={hasActionError ? "project-create-status" : undefined}
+              data-id={PROJECT_DASHBOARD_TEST_IDS.nameInput}
+              className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
+              placeholder="e.g. Website launch"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="project-repository" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              GitHub repository
+            </label>
+            <input
+              id="project-repository"
+              name="repository"
+              required
+              disabled={isPending}
+              aria-invalid={hasActionError}
+              aria-describedby={hasActionError ? "project-create-status" : undefined}
+              data-id={PROJECT_DASHBOARD_TEST_IDS.repositoryInput}
+              className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
+              placeholder="e.g. johnpwise/kanban-app"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="project-default-branch" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Default branch
+            </label>
+            <input
+              id="project-default-branch"
+              name="defaultBranch"
+              required
+              maxLength={255}
+              disabled={isPending}
+              aria-invalid={hasActionError}
+              aria-describedby={hasActionError ? "project-create-status" : undefined}
+              data-id={PROJECT_DASHBOARD_TEST_IDS.defaultBranchInput}
+              className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
+              placeholder="e.g. develop"
+            />
+          </div>
         </div>
         <button
           type="submit"
           disabled={isPending}
           data-id={PROJECT_DASHBOARD_TEST_IDS.submit}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="inline-flex items-center justify-center gap-2 self-start rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
           {isPending ? "Creating project…" : "Create project"}
@@ -98,7 +133,15 @@ export default function ProjectDashboard({ projects, loadError }: ProjectDashboa
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
                     <FolderKanban className="h-5 w-5" aria-hidden="true" />
                   </span>
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{project.name}</span>
+                  <span className="flex flex-col">
+                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{project.name}</span>
+                    <span
+                      data-id={PROJECT_DASHBOARD_TEST_IDS.target(project.id)}
+                      className="text-xs text-slate-500 dark:text-slate-400"
+                    >
+                      {project.repository} · {project.defaultBranch}
+                    </span>
+                  </span>
                 </span>
                 <ArrowRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-1" aria-hidden="true" />
               </Link>

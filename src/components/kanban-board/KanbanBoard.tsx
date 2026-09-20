@@ -9,6 +9,7 @@ import LabelFilter from "@/components/label-filter/LabelFilter";
 import { addCardAction } from "@/actions/addCard";
 import { deleteCardAction } from "@/actions/deleteCard";
 import { moveCardAction } from "@/actions/moveCard";
+import { startExecutionAction } from "@/actions/startExecution";
 import { updateCardAction } from "@/actions/updateCard";
 
 import type {
@@ -37,7 +38,8 @@ type BoardMutation =
   | { kind: "move"; request: MoveCardRequest }
   | { kind: "add"; request: AddCardRequest }
   | { kind: "delete"; request: DeleteCardRequest }
-  | { kind: "update"; request: UpdateCardRequest };
+  | { kind: "update"; request: UpdateCardRequest }
+  | { kind: "start-execution"; request: { cardId: string } };
 
 async function dispatchBoardMutation(
   projectId: string,
@@ -53,6 +55,8 @@ async function dispatchBoardMutation(
       return deleteCardAction({ status: "idle" }, projectId, mutation.request);
     case "update":
       return updateCardAction({ status: "idle" }, projectId, mutation.request);
+    case "start-execution":
+      return startExecutionAction({ status: "idle" }, projectId, mutation.request.cardId);
   }
 }
 
@@ -155,13 +159,17 @@ function applyOptimisticMutation(board: Board, mutation: BoardMutation): Board {
       return applyOptimisticDelete(board, mutation.request);
     case "update":
       return applyOptimisticUpdate(board, mutation.request);
+    case "start-execution":
+      // Intentionally no optimistic change: the Start control shows a real pending
+      // state instead of assuming success.
+      return board;
   }
 }
 
 const initialActionState: BoardActionState = { status: "idle" };
 
 export default function KanbanBoard({ projectId, initialBoard }: KanbanBoardProps) {
-  const [actionState, dispatchMutation] = useActionState(
+  const [actionState, dispatchMutation, isPending] = useActionState(
     dispatchBoardMutation.bind(null, projectId),
     initialActionState,
   );
@@ -234,6 +242,12 @@ export default function KanbanBoard({ projectId, initialBoard }: KanbanBoardProp
     });
   }
 
+  function handleStartExecution(cardId: string) {
+    startTransition(() => {
+      dispatchMutation({ kind: "start-execution", request: { cardId } });
+    });
+  }
+
   return (
     <div data-id={KANBAN_BOARD_TEST_IDS.board} className="space-y-3">
       <LabelFilter activeLabel={activeLabel} onChange={setActiveLabel} />
@@ -274,6 +288,9 @@ export default function KanbanBoard({ projectId, initialBoard }: KanbanBoardProp
         card={openCardId ? (optimisticBoard.cardsById[openCardId] ?? null) : null}
         onClose={() => setOpenCardId(null)}
         onSave={handleUpdateCard}
+        onStartExecution={handleStartExecution}
+        isStartingExecution={isPending}
+        startExecutionError={actionState.status === "error" ? (actionState.message ?? null) : null}
       />
     </div>
   );

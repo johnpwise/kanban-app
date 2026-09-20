@@ -20,21 +20,41 @@ describe("ProjectDashboard", () => {
 
     expect(screen.getByText("No projects yet")).toBeInTheDocument();
     expect(screen.getByLabelText("Project name")).toHaveAttribute("name", "name");
+    expect(screen.getByLabelText("GitHub repository")).toHaveAttribute("name", "repository");
+    expect(screen.getByLabelText("Default branch")).toHaveAttribute("name", "defaultBranch");
     expect(screen.getByRole("button", { name: "Create project" })).toBeEnabled();
   });
 
-  it("should list projects as links to their independent boards", () => {
+  it("should list projects as links to their independent boards, with their GitHub target", () => {
     render(
       <ProjectDashboard
         projects={[
-          { id: "project-one", name: "Project One", createdAt: "2026-09-19T09:30:00.000Z" },
-          { id: "project-two", name: "Project Two", createdAt: "2026-09-19T10:30:00.000Z" },
+          {
+            id: "project-one",
+            name: "Project One",
+            repository: "johnpwise/kanban-app",
+            defaultBranch: "develop",
+            createdAt: "2026-09-19T09:30:00.000Z",
+          },
+          {
+            id: "project-two",
+            name: "Project Two",
+            repository: "johnpwise/other-repo",
+            defaultBranch: "main",
+            createdAt: "2026-09-19T10:30:00.000Z",
+          },
         ]}
       />,
     );
 
     expect(screen.getByRole("link", { name: /Project One/ })).toHaveAttribute("href", "/projects/project-one");
     expect(screen.getByRole("link", { name: /Project Two/ })).toHaveAttribute("href", "/projects/project-two");
+    expect(screen.getByTestId(PROJECT_DASHBOARD_TEST_IDS.target("project-one"))).toHaveTextContent(
+      "johnpwise/kanban-app · develop",
+    );
+    expect(screen.getByTestId(PROJECT_DASHBOARD_TEST_IDS.target("project-two"))).toHaveTextContent(
+      "johnpwise/other-repo · main",
+    );
   });
 
   it("should show a safe action error", async () => {
@@ -42,6 +62,8 @@ describe("ProjectDashboard", () => {
     render(<ProjectDashboard projects={[]} />);
 
     fireEvent.change(screen.getByLabelText("Project name"), { target: { value: "Launch plan" } });
+    fireEvent.change(screen.getByLabelText("GitHub repository"), { target: { value: "johnpwise/kanban-app" } });
+    fireEvent.change(screen.getByLabelText("Default branch"), { target: { value: "develop" } });
     fireEvent.submit(screen.getByTestId(PROJECT_DASHBOARD_TEST_IDS.form));
 
     const status = await screen.findByRole("status");

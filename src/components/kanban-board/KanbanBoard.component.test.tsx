@@ -5,6 +5,7 @@ vi.mock("@/actions/addCard", () => ({ addCardAction: vi.fn(() => new Promise(() 
 vi.mock("@/actions/deleteCard", () => ({ deleteCardAction: vi.fn(() => new Promise(() => undefined)) }));
 vi.mock("@/actions/moveCard", () => ({ moveCardAction: vi.fn(() => new Promise(() => undefined)) }));
 vi.mock("@/actions/updateCard", () => ({ updateCardAction: vi.fn(() => new Promise(() => undefined)) }));
+vi.mock("@/actions/startExecution", () => ({ startExecutionAction: vi.fn(() => new Promise(() => undefined)) }));
 
 import KanbanBoard from "./KanbanBoard";
 
@@ -160,6 +161,23 @@ describe("KanbanBoard", () => {
       expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.notesInput)).toHaveValue("Check with design");
     });
     expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.dueDateInput)).toHaveValue("2026-02-01");
+  });
+
+  it("should show the Start control on a not_started card and disable it once clicked, without moving it", async () => {
+    // Arrange
+    render(<KanbanBoard projectId="project-one" initialBoard={initialBoard} />);
+    fireEvent.doubleClick(screen.getByTestId(KANBAN_CARD_TEST_IDS.card("card-1")));
+    expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.executionStatusBadge)).toHaveTextContent("Not Started");
+
+    // Act
+    fireEvent.click(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.startExecutionButton));
+
+    // Assert: the mocked action never resolves, so the control stays visible but pending
+    await waitFor(() => {
+      expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.startExecutionButton)).toBeDisabled();
+    });
+    expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.startExecutionButton)).toHaveTextContent("Starting…");
+    expect(screen.getByTestId(KANBAN_COLUMN_TEST_IDS.cardList("todo"))).toHaveTextContent("Ship the demo");
   });
 
   it("should reset label filtering when a different project board mounts", () => {
