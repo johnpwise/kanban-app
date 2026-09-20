@@ -21,6 +21,10 @@ pubsub-debug.log
 functions/node_modules
 functions/lib
 
+# ADA executor (standalone npm project, own installed deps + build output)
+executor/node_modules
+executor/lib
+
 # next.js
 /.next/
 /out/

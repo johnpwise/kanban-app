@@ -1,0 +1,11 @@
+node_modules
+lib
+*.unit.test.ts
+*.integration.test.ts
+vitest.unit.config.mts
+vitest.integration.config.mts
+eslint.config.mjs
+.env
+.env.*
+npm-debug.log*
+.git
