@@ -109,4 +109,24 @@ test.describe("project boards", () => {
     await page.goto("/board");
     await expect(page).toHaveURL(/\/$/);
   });
+
+  test("should start ADA work and show Queued without moving the card to another column", async ({ page }) => {
+    await createProject(page, `ADA ${Date.now()}`);
+    const title = `Task ${Date.now()}`;
+    await addCard(page, "todo", title);
+
+    const card = page.locator('[data-id^="kanban-card-"]', { hasText: title });
+    await card.dblclick();
+    await expect(page.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.executionStatusBadge)).toContainText(
+      "Not Started",
+    );
+
+    await page.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.startExecutionButton).click();
+
+    await expect(page.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.executionStatusBadge)).toContainText("Queued");
+    await expect(page.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.startExecutionButton)).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByTestId(KANBAN_COLUMN_TEST_IDS.cardList("todo")).getByText(title)).toBeVisible();
+  });
 });
