@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/playwright-report/
 firestore-debug.log
 firebase-debug.log
 pubsub-debug.log
