@@ -12,8 +12,14 @@
 
 # testing
 /coverage
+/playwright-report/
 firestore-debug.log
 firebase-debug.log
+pubsub-debug.log
+
+# firebase functions (standalone npm project, own installed deps + build output)
+functions/node_modules
+functions/lib
 
 # next.js
 /.next/
