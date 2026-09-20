@@ -37,6 +37,51 @@ describe("CardDetailModal", () => {
     expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.dueDateInput)).toHaveValue("2026-02-01");
   });
 
+  it("should display the ADA task prompt", () => {
+    // Act
+    render(<CardDetailModal card={card} onClose={vi.fn()} onSave={vi.fn()} />);
+
+    // Assert
+    expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.promptDisplay)).toHaveTextContent(
+      "Ship the demo build.",
+    );
+  });
+
+  it("should display the execution status as a human-readable value", () => {
+    // Act
+    render(<CardDetailModal card={card} onClose={vi.fn()} onSave={vi.fn()} />);
+
+    // Assert
+    expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.executionStatusBadge)).toHaveTextContent(
+      "Not Started",
+    );
+  });
+
+  it("should format each execution status as a human-readable value", () => {
+    // Arrange
+    const statuses = [
+      { executionStatus: "queued" as const, expected: "Queued" },
+      { executionStatus: "planning" as const, expected: "Planning" },
+      { executionStatus: "implementing" as const, expected: "Implementing" },
+      { executionStatus: "testing" as const, expected: "Testing" },
+      { executionStatus: "creating_pr" as const, expected: "Creating PR" },
+      { executionStatus: "completed" as const, expected: "Completed" },
+      { executionStatus: "failed" as const, expected: "Failed" },
+      { executionStatus: "cancelled" as const, expected: "Cancelled" },
+    ];
+
+    statuses.forEach(({ executionStatus, expected }) => {
+      // Act
+      const { unmount } = render(
+        <CardDetailModal card={{ ...card, executionStatus }} onClose={vi.fn()} onSave={vi.fn()} />,
+      );
+
+      // Assert
+      expect(screen.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.executionStatusBadge)).toHaveTextContent(expected);
+      unmount();
+    });
+  });
+
   it("should call onSave with the edited notes and due date, then onClose, when Save is clicked", () => {
     // Arrange
     const onSave = vi.fn();
