@@ -10,6 +10,8 @@ import type { Page } from "@playwright/test";
 async function createProject(page: Page, name: string) {
   await page.goto("/");
   await page.getByLabel("Project name").fill(name);
+  await page.getByLabel("GitHub repository").fill("johnpwise/kanban-app");
+  await page.getByLabel("Default branch").fill("develop");
   await page.getByRole("button", { name: "Create project" }).click();
   await expect(page).toHaveURL(/\/projects\/[^/]+$/);
   return page.url().split("/").at(-1) as string;
@@ -20,6 +22,7 @@ async function addCard(page: Page, columnId: string, title: string, label?: "bug
   if (label) {
     await page.getByTestId(ADD_CARD_FORM_TEST_IDS.labelSelect(columnId)).selectOption(label);
   }
+  await page.getByTestId(ADD_CARD_FORM_TEST_IDS.promptInput(columnId)).fill(`Prompt for ${title}`);
   await page.getByTestId(ADD_CARD_FORM_TEST_IDS.submit(columnId)).click();
   await expect(page.getByTestId(KANBAN_COLUMN_TEST_IDS.cardList(columnId)).getByText(title)).toBeVisible();
 }
@@ -108,5 +111,25 @@ test.describe("project boards", () => {
 
     await page.goto("/board");
     await expect(page).toHaveURL(/\/$/);
+  });
+
+  test("should start ADA work and show Queued without moving the card to another column", async ({ page }) => {
+    await createProject(page, `ADA ${Date.now()}`);
+    const title = `Task ${Date.now()}`;
+    await addCard(page, "todo", title);
+
+    const card = page.locator('[data-id^="kanban-card-"]', { hasText: title });
+    await card.dblclick();
+    await expect(page.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.executionStatusBadge)).toContainText(
+      "Not Started",
+    );
+
+    await page.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.startExecutionButton).click();
+
+    await expect(page.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.executionStatusBadge)).toContainText("Queued");
+    await expect(page.getByTestId(CARD_DETAIL_MODAL_TEST_IDS.startExecutionButton)).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByTestId(KANBAN_COLUMN_TEST_IDS.cardList("todo")).getByText(title)).toBeVisible();
   });
 });

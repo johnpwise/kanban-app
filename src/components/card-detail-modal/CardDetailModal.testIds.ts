@@ -6,4 +6,6 @@ export const CARD_DETAIL_MODAL_TEST_IDS = {
   cancelButton: "card-detail-modal-cancel",
   promptDisplay: "card-detail-modal-prompt",
   executionStatusBadge: "card-detail-modal-execution-status",
+  startExecutionButton: "card-detail-modal-start-execution",
+  startExecutionError: "card-detail-modal-start-execution-error",
 } as const;
