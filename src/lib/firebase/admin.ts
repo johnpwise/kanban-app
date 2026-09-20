@@ -1,5 +1,7 @@
 import "server-only";
 
+import "@/lib/firebase/protobufLongCompat";
+
 import { Firestore } from "@google-cloud/firestore";
 import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
