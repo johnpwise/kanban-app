@@ -2,7 +2,7 @@ import { Timestamp } from "firebase-admin/firestore";
 
 import { deleteCardFromBoard, moveCardInBoard } from "@/lib/domain/board";
 import { boardSchema } from "@/schemas/board";
-import { projectNameSchema, projectSchema } from "@/schemas/project";
+import { createProjectRequestSchema, projectSchema } from "@/schemas/project";
 
 import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import type {
@@ -13,7 +13,7 @@ import type {
   MoveCardRequest,
   UpdateCardRequest,
 } from "@/schemas/board";
-import type { Project } from "@/schemas/project";
+import type { CreateProjectRequest, Project } from "@/schemas/project";
 
 const DEFAULT_COLUMNS = [
   { id: "todo", title: "To Do", position: 0 },
@@ -49,8 +49,13 @@ const DEMO_CARDS = [
 
 interface ProjectDocument {
   name: string;
+  repository: string;
+  defaultBranch: string;
   createdAt: Timestamp;
 }
+
+const DEMO_PROJECT_REPOSITORY = "johnpwise/kanban-app";
+const DEMO_PROJECT_DEFAULT_BRANCH = "develop";
 
 interface ColumnDocument {
   title: string;
@@ -83,6 +88,8 @@ function mapProject(snapshot: QueryDocumentSnapshot): Project {
   return projectSchema.parse({
     id: snapshot.id,
     name: data.name,
+    repository: data.repository,
+    defaultBranch: data.defaultBranch,
     createdAt: data.createdAt.toDate().toISOString(),
   });
 }
@@ -107,13 +114,13 @@ export async function listProjects(firestore: Firestore): Promise<Project[]> {
   return snapshot.docs.map(mapProject);
 }
 
-export async function createProject(firestore: Firestore, name: string): Promise<Project> {
-  const parsedName = projectNameSchema.parse(name);
+export async function createProject(firestore: Firestore, input: CreateProjectRequest): Promise<Project> {
+  const { name, repository, defaultBranch } = createProjectRequestSchema.parse(input);
   const reference = firestore.collection("projects").doc();
   const createdAt = Timestamp.now();
   const batch = firestore.batch();
 
-  batch.create(reference, { name: parsedName, createdAt } satisfies ProjectDocument);
+  batch.create(reference, { name, repository, defaultBranch, createdAt } satisfies ProjectDocument);
 
   for (const column of DEFAULT_COLUMNS) {
     batch.create(reference.collection("columns").doc(column.id), {
@@ -125,7 +132,13 @@ export async function createProject(firestore: Firestore, name: string): Promise
 
   await batch.commit();
 
-  return projectSchema.parse({ id: reference.id, name: parsedName, createdAt: createdAt.toDate().toISOString() });
+  return projectSchema.parse({
+    id: reference.id,
+    name,
+    repository,
+    defaultBranch,
+    createdAt: createdAt.toDate().toISOString(),
+  });
 }
 
 export async function seedDemoProject(firestore: Firestore): Promise<Project> {
@@ -140,7 +153,12 @@ export async function seedDemoProject(firestore: Firestore): Promise<Project> {
     }
 
     const createdAt = Timestamp.now();
-    transaction.create(reference, { name: "Demo Project", createdAt } satisfies ProjectDocument);
+    transaction.create(reference, {
+      name: "Demo Project",
+      repository: DEMO_PROJECT_REPOSITORY,
+      defaultBranch: DEMO_PROJECT_DEFAULT_BRANCH,
+      createdAt,
+    } satisfies ProjectDocument);
 
     for (const column of DEFAULT_COLUMNS) {
       const cardIds =
@@ -171,6 +189,8 @@ export async function seedDemoProject(firestore: Firestore): Promise<Project> {
     return projectSchema.parse({
       id: reference.id,
       name: "Demo Project",
+      repository: DEMO_PROJECT_REPOSITORY,
+      defaultBranch: DEMO_PROJECT_DEFAULT_BRANCH,
       createdAt: createdAt.toDate().toISOString(),
     });
   });

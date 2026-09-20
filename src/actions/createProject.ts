@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createProject } from "@/lib/services/projects";
 import { getCurrentUser } from "@/lib/services/session";
-import { projectNameSchema } from "@/schemas/project";
+import { createProjectRequestSchema } from "@/schemas/project";
 
 export interface CreateProjectActionState {
   status: "idle" | "error";
@@ -22,12 +22,16 @@ export async function createProjectAction(
     return { status: "error", message: "You must be signed in to create a project." };
   }
 
-  const parsed = projectNameSchema.safeParse(formData.get("name"));
+  const parsed = createProjectRequestSchema.safeParse({
+    name: formData.get("name"),
+    repository: formData.get("repository"),
+    defaultBranch: formData.get("defaultBranch"),
+  });
 
   if (!parsed.success) {
     return {
       status: "error",
-      message: parsed.error.issues[0]?.message ?? "Enter a valid project name.",
+      message: parsed.error.issues[0]?.message ?? "Enter valid project details.",
     };
   }
 

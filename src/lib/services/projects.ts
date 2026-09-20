@@ -7,12 +7,14 @@ import {
   listProjects as listProjectsFromRepository,
 } from "@/lib/repositories/firestoreBoardRepository";
 
+import type { CreateProjectRequest } from "@/schemas/project";
+
 export async function listProjects() {
   return listProjectsFromRepository(getFirebaseFirestore());
 }
 
-export async function createProject(name: string) {
-  return createProjectInRepository(getFirebaseFirestore(), name);
+export async function createProject(input: CreateProjectRequest) {
+  return createProjectInRepository(getFirebaseFirestore(), input);
 }
 
 export async function getProject(projectId: string) {
