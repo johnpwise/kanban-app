@@ -2,6 +2,18 @@ import { z } from "zod";
 
 export const cardLabelSchema = z.enum(["bug", "feature", "chore"]);
 
+export const executionStatusSchema = z.enum([
+  "not_started",
+  "queued",
+  "planning",
+  "implementing",
+  "testing",
+  "creating_pr",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
 export const cardSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -9,6 +21,10 @@ export const cardSchema = z.object({
   createdAt: z.string(),
   notes: z.string().nullable(),
   dueDate: z.string().nullable(),
+  prompt: z.string(),
+  executionStatus: executionStatusSchema,
+  createdBy: z.string().min(1),
+  updatedAt: z.string(),
 });
 
 export const columnSchema = z.object({
@@ -33,6 +49,7 @@ export const addCardRequestSchema = z.object({
   columnId: z.string().min(1),
   title: z.string().min(1).max(200),
   label: cardLabelSchema.nullable(),
+  prompt: z.string().min(1),
 });
 
 export const deleteCardRequestSchema = z.object({
@@ -46,6 +63,7 @@ export const updateCardRequestSchema = z.object({
 });
 
 export type CardLabel = z.infer<typeof cardLabelSchema>;
+export type ExecutionStatus = z.infer<typeof executionStatusSchema>;
 export type Card = z.infer<typeof cardSchema>;
 export type Column = z.infer<typeof columnSchema>;
 export type Board = z.infer<typeof boardSchema>;

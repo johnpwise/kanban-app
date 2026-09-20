@@ -19,8 +19,8 @@ export async function moveCard(projectId: string, request: MoveCardRequest) {
   return moveCardInRepository(getFirebaseFirestore(), projectId, request);
 }
 
-export async function addCard(projectId: string, request: AddCardRequest) {
-  return addCardInRepository(getFirebaseFirestore(), projectId, request);
+export async function addCard(projectId: string, request: AddCardRequest, createdBy: string) {
+  return addCardInRepository(getFirebaseFirestore(), projectId, request, createdBy);
 }
 
 export async function deleteCard(projectId: string, request: DeleteCardRequest) {

@@ -27,6 +27,7 @@ describe("addCardAction", () => {
       columnId: "todo",
       title: "New task",
       label: null,
+      prompt: "Do the new task.",
     });
 
     // Assert
@@ -36,7 +37,18 @@ describe("addCardAction", () => {
 
   it("should return an error state for an invalid add-card request", async () => {
     // Arrange
-    const invalidRequest = { cardId: "card-9", columnId: "todo", title: "", label: null };
+    const invalidRequest = { cardId: "card-9", columnId: "todo", title: "", label: null, prompt: "Do the new task." };
+
+    // Act
+    const result = await addCardAction({ status: "idle" }, "project-one", invalidRequest);
+
+    // Assert
+    expect(result.status).toBe("error");
+  });
+
+  it("should return an error state when the prompt is blank", async () => {
+    // Arrange
+    const invalidRequest = { cardId: "card-9", columnId: "todo", title: "New task", label: null, prompt: "" };
 
     // Act
     const result = await addCardAction({ status: "idle" }, "project-one", invalidRequest);
@@ -47,7 +59,7 @@ describe("addCardAction", () => {
 
   it("should add the card and return the updated board on success", async () => {
     // Arrange
-    const request = { cardId: "card-9", columnId: "todo", title: "New task", label: "chore" };
+    const request = { cardId: "card-9", columnId: "todo", title: "New task", label: "chore", prompt: "Do the new task." };
 
     // Act
     addCardMock.mockResolvedValue({
@@ -60,6 +72,10 @@ describe("addCardAction", () => {
           createdAt: "2026-09-19T09:30:00.000Z",
           notes: null,
           dueDate: null,
+          prompt: "Do the new task.",
+          executionStatus: "not_started",
+          createdBy: "user-1",
+          updatedAt: "2026-09-19T09:30:00.000Z",
         },
       },
     });
@@ -75,8 +91,11 @@ describe("addCardAction", () => {
       label: "chore",
       notes: null,
       dueDate: null,
+      prompt: "Do the new task.",
+      executionStatus: "not_started",
+      createdBy: "user-1",
     });
-    expect(addCardMock).toHaveBeenCalledWith("project-one", request);
+    expect(addCardMock).toHaveBeenCalledWith("project-one", request, "user-1");
   });
 
   it("should reject an invalid project id", async () => {
@@ -85,6 +104,7 @@ describe("addCardAction", () => {
       columnId: "todo",
       title: "New task",
       label: null,
+      prompt: "Do the new task.",
     });
 
     expect(result.status).toBe("error");

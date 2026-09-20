@@ -16,7 +16,18 @@ describe("KanbanColumn", () => {
   it("should render its cards and column title with a count", () => {
     // Arrange
     const cards = [
-      { id: "card-1", title: "Ship the demo", label: null, createdAt: "2026-01-05T09:00:00.000Z", notes: null, dueDate: null },
+      {
+        id: "card-1",
+        title: "Ship the demo",
+        label: null,
+        createdAt: "2026-01-05T09:00:00.000Z",
+        notes: null,
+        dueDate: null,
+        prompt: "Ship the demo build.",
+        executionStatus: "not_started" as const,
+        createdBy: "user-1",
+        updatedAt: "2026-01-05T09:00:00.000Z",
+      },
     ];
 
     // Act
@@ -80,20 +91,33 @@ describe("KanbanColumn", () => {
       />,
     );
     const titleInput = screen.getByTestId(ADD_CARD_FORM_TEST_IDS.titleInput("todo"));
+    const promptInput = screen.getByTestId(ADD_CARD_FORM_TEST_IDS.promptInput("todo"));
 
     // Act
     fireEvent.change(titleInput, { target: { value: "Refill the snacks" } });
+    fireEvent.change(promptInput, { target: { value: "Buy and refill the office snacks." } });
     fireEvent.submit(screen.getByTestId(ADD_CARD_FORM_TEST_IDS.form("todo")));
 
     // Assert
-    expect(onAddCard).toHaveBeenCalledWith("todo", "Refill the snacks", null);
+    expect(onAddCard).toHaveBeenCalledWith("todo", "Refill the snacks", null, "Buy and refill the office snacks.");
   });
 
   it("should call onDeleteCard with the card id when its delete button is clicked", () => {
     // Arrange
     const onDeleteCard = vi.fn();
     const cards = [
-      { id: "card-1", title: "Ship the demo", label: null, createdAt: "2026-01-05T09:00:00.000Z", notes: null, dueDate: null },
+      {
+        id: "card-1",
+        title: "Ship the demo",
+        label: null,
+        createdAt: "2026-01-05T09:00:00.000Z",
+        notes: null,
+        dueDate: null,
+        prompt: "Ship the demo build.",
+        executionStatus: "not_started" as const,
+        createdBy: "user-1",
+        updatedAt: "2026-01-05T09:00:00.000Z",
+      },
     ];
     render(
       <KanbanColumn
@@ -120,8 +144,30 @@ describe("KanbanColumn", () => {
     // Arrange
     const onReorderCard = vi.fn();
     const cards = [
-      { id: "card-1", title: "Ship the demo", label: null, createdAt: "2026-01-05T09:00:00.000Z", notes: null, dueDate: null },
-      { id: "card-2", title: "Write the docs", label: null, createdAt: "2026-01-06T09:00:00.000Z", notes: null, dueDate: null },
+      {
+        id: "card-1",
+        title: "Ship the demo",
+        label: null,
+        createdAt: "2026-01-05T09:00:00.000Z",
+        notes: null,
+        dueDate: null,
+        prompt: "Ship the demo build.",
+        executionStatus: "not_started" as const,
+        createdBy: "user-1",
+        updatedAt: "2026-01-05T09:00:00.000Z",
+      },
+      {
+        id: "card-2",
+        title: "Write the docs",
+        label: null,
+        createdAt: "2026-01-06T09:00:00.000Z",
+        notes: null,
+        dueDate: null,
+        prompt: "Write the docs.",
+        executionStatus: "not_started" as const,
+        createdBy: "user-1",
+        updatedAt: "2026-01-06T09:00:00.000Z",
+      },
     ];
     const columnWithTwoCards = { id: "todo", title: "To Do", cardIds: ["card-1", "card-2"] };
     render(
@@ -148,8 +194,30 @@ describe("KanbanColumn", () => {
   it("should disable move-up for the first card and move-down for the last card", () => {
     // Arrange
     const cards = [
-      { id: "card-1", title: "Ship the demo", label: null, createdAt: "2026-01-05T09:00:00.000Z", notes: null, dueDate: null },
-      { id: "card-2", title: "Write the docs", label: null, createdAt: "2026-01-06T09:00:00.000Z", notes: null, dueDate: null },
+      {
+        id: "card-1",
+        title: "Ship the demo",
+        label: null,
+        createdAt: "2026-01-05T09:00:00.000Z",
+        notes: null,
+        dueDate: null,
+        prompt: "Ship the demo build.",
+        executionStatus: "not_started" as const,
+        createdBy: "user-1",
+        updatedAt: "2026-01-05T09:00:00.000Z",
+      },
+      {
+        id: "card-2",
+        title: "Write the docs",
+        label: null,
+        createdAt: "2026-01-06T09:00:00.000Z",
+        notes: null,
+        dueDate: null,
+        prompt: "Write the docs.",
+        executionStatus: "not_started" as const,
+        createdBy: "user-1",
+        updatedAt: "2026-01-06T09:00:00.000Z",
+      },
     ];
     const columnWithTwoCards = { id: "todo", title: "To Do", cardIds: ["card-1", "card-2"] };
 

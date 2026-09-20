@@ -11,6 +11,10 @@ const card = {
   createdAt: "2026-01-05T09:00:00.000Z",
   notes: "Existing notes",
   dueDate: "2026-02-01",
+  prompt: "Ship the demo build.",
+  executionStatus: "not_started" as const,
+  createdBy: "user-1",
+  updatedAt: "2026-01-05T09:00:00.000Z",
 };
 
 describe("CardDetailModal", () => {

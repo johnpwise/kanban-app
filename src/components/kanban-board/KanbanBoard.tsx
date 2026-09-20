@@ -94,13 +94,18 @@ function applyOptimisticAdd(board: Board, request: AddCardRequest): Board {
     column.id === request.columnId ? { ...column, cardIds: [...column.cardIds, request.cardId] } : column,
   );
 
+  const now = new Date().toISOString();
   const card = {
     id: request.cardId,
     title: request.title,
     label: request.label,
-    createdAt: new Date().toISOString(),
+    createdAt: now,
     notes: null,
     dueDate: null,
+    prompt: request.prompt,
+    executionStatus: "not_started" as const,
+    createdBy: "",
+    updatedAt: now,
   };
 
   return { columns, cardsById: { ...board.cardsById, [request.cardId]: card } };
@@ -130,7 +135,12 @@ function applyOptimisticUpdate(board: Board, request: UpdateCardRequest): Board 
     return board;
   }
 
-  const updatedCard = { ...card, notes: request.notes, dueDate: request.dueDate };
+  const updatedCard = {
+    ...card,
+    notes: request.notes,
+    dueDate: request.dueDate,
+    updatedAt: new Date().toISOString(),
+  };
 
   return { ...board, cardsById: { ...board.cardsById, [request.cardId]: updatedCard } };
 }
@@ -175,8 +185,8 @@ export default function KanbanBoard({ projectId, initialBoard }: KanbanBoardProp
     });
   }
 
-  function handleAddCard(columnId: string, title: string, label: CardLabel | null) {
-    const request: AddCardRequest = { cardId: crypto.randomUUID(), columnId, title, label };
+  function handleAddCard(columnId: string, title: string, label: CardLabel | null, prompt: string) {
+    const request: AddCardRequest = { cardId: crypto.randomUUID(), columnId, title, label, prompt };
 
     startTransition(() => {
       applyOptimistic({ kind: "add", request });
