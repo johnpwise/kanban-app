@@ -4,4 +4,6 @@ export const CARD_DETAIL_MODAL_TEST_IDS = {
   dueDateInput: "card-detail-modal-due-date",
   saveButton: "card-detail-modal-save",
   cancelButton: "card-detail-modal-cancel",
+  promptDisplay: "card-detail-modal-prompt",
+  executionStatusBadge: "card-detail-modal-execution-status",
 } as const;
