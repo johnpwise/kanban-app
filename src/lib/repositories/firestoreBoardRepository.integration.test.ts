@@ -38,13 +38,22 @@ describeWithEmulator("Firestore board repository", () => {
   });
 
   it("should create and list a project with three empty default columns", async () => {
-    const project = await createProject(firestore, "  Project Alpha  ");
+    const project = await createProject(firestore, {
+      name: "  Project Alpha  ",
+      repository: "johnpwise/kanban-app",
+      defaultBranch: "develop",
+    });
     createdProjectIds.push(project.id);
 
     const board = await getProjectBoard(firestore, project.id);
     const projects = await listProjects(firestore);
 
-    expect(project).toMatchObject({ name: "Project Alpha", createdAt: expect.any(String) });
+    expect(project).toMatchObject({
+      name: "Project Alpha",
+      repository: "johnpwise/kanban-app",
+      defaultBranch: "develop",
+      createdAt: expect.any(String),
+    });
     expect(board?.columns).toEqual([
       { id: "todo", title: "To Do", cardIds: [] },
       { id: "in-progress", title: "In Progress", cardIds: [] },
@@ -55,8 +64,16 @@ describeWithEmulator("Firestore board repository", () => {
   });
 
   it("should keep card mutations isolated to their project", async () => {
-    const firstProject = await createProject(firestore, "First project");
-    const secondProject = await createProject(firestore, "Second project");
+    const firstProject = await createProject(firestore, {
+      name: "First project",
+      repository: "johnpwise/kanban-app",
+      defaultBranch: "develop",
+    });
+    const secondProject = await createProject(firestore, {
+      name: "Second project",
+      repository: "johnpwise/kanban-app",
+      defaultBranch: "develop",
+    });
     createdProjectIds.push(firstProject.id, secondProject.id);
 
     await addCard(
@@ -96,7 +113,11 @@ describeWithEmulator("Firestore board repository", () => {
   });
 
   it("should refresh updatedAt when a card is updated", async () => {
-    const project = await createProject(firestore, "Update timestamps");
+    const project = await createProject(firestore, {
+      name: "Update timestamps",
+      repository: "johnpwise/kanban-app",
+      defaultBranch: "develop",
+    });
     createdProjectIds.push(project.id);
 
     await addCard(
@@ -127,6 +148,8 @@ describeWithEmulator("Firestore board repository", () => {
 
     expect(second.id).toBe(first.id);
     expect(first.name).toBe("Demo Project");
+    expect(first.repository).toBe("johnpwise/kanban-app");
+    expect(first.defaultBranch).toBe("develop");
     expect(board?.columns.find((column) => column.id === "todo")?.cardIds).toEqual(["card-1", "card-2"]);
     expect(board?.cardsById["card-3"]).toMatchObject({
       title: "Wire up CI",
