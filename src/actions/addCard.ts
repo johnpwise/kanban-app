@@ -39,7 +39,7 @@ export async function addCardAction(
   }
 
   try {
-    const board = await addCard(parsedProjectId.data, parsed.data);
+    const board = await addCard(parsedProjectId.data, parsed.data, user.uid);
 
     return { status: "success", board };
   } catch (error) {

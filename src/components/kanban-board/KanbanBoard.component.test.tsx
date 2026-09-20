@@ -28,6 +28,10 @@ const initialBoard: Board = {
       createdAt: "2026-01-05T09:00:00.000Z",
       notes: null,
       dueDate: null,
+      prompt: "Ship the demo build.",
+      executionStatus: "not_started",
+      createdBy: "user-1",
+      updatedAt: "2026-01-05T09:00:00.000Z",
     },
     "card-2": {
       id: "card-2",
@@ -36,6 +40,10 @@ const initialBoard: Board = {
       createdAt: "2026-01-06T09:00:00.000Z",
       notes: null,
       dueDate: null,
+      prompt: "Write the docs.",
+      executionStatus: "not_started",
+      createdBy: "user-1",
+      updatedAt: "2026-01-06T09:00:00.000Z",
     },
   },
 };
@@ -69,9 +77,11 @@ describe("KanbanBoard", () => {
     // Arrange
     render(<KanbanBoard projectId="project-one" initialBoard={initialBoard} />);
     const titleInput = screen.getByTestId(ADD_CARD_FORM_TEST_IDS.titleInput("done"));
+    const promptInput = screen.getByTestId(ADD_CARD_FORM_TEST_IDS.promptInput("done"));
 
     // Act
     fireEvent.change(titleInput, { target: { value: "Celebrate the release" } });
+    fireEvent.change(promptInput, { target: { value: "Celebrate shipping the release." } });
     fireEvent.submit(screen.getByTestId(ADD_CARD_FORM_TEST_IDS.form("done")));
 
     // Assert
@@ -115,6 +125,9 @@ describe("KanbanBoard", () => {
     render(<KanbanBoard projectId="project-one" initialBoard={initialBoard} />);
     fireEvent.change(screen.getByTestId(ADD_CARD_FORM_TEST_IDS.titleInput("done")), {
       target: { value: "Review the modal copy" },
+    });
+    fireEvent.change(screen.getByTestId(ADD_CARD_FORM_TEST_IDS.promptInput("done")), {
+      target: { value: "Review the modal copy for accuracy." },
     });
     fireEvent.submit(screen.getByTestId(ADD_CARD_FORM_TEST_IDS.form("done")));
     await waitFor(() => {

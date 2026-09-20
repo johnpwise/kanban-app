@@ -59,12 +59,18 @@ describeWithEmulator("Firestore board repository", () => {
     const secondProject = await createProject(firestore, "Second project");
     createdProjectIds.push(firstProject.id, secondProject.id);
 
-    await addCard(firestore, firstProject.id, {
-      cardId: "card-1",
-      columnId: "todo",
-      title: "Only in first",
-      label: "feature",
-    });
+    await addCard(
+      firestore,
+      firstProject.id,
+      {
+        cardId: "card-1",
+        columnId: "todo",
+        title: "Only in first",
+        label: "feature",
+        prompt: "Do the first thing.",
+      },
+      "user-1",
+    );
     await moveCard(firestore, firstProject.id, { cardId: "card-1", toColumnId: "done", toIndex: 0 });
     await updateCard(firestore, firstProject.id, {
       cardId: "card-1",
@@ -76,11 +82,36 @@ describeWithEmulator("Firestore board repository", () => {
     const secondBoard = await getProjectBoard(firestore, secondProject.id);
 
     expect(firstBoard?.columns.find((column) => column.id === "done")?.cardIds).toEqual(["card-1"]);
-    expect(firstBoard?.cardsById["card-1"]).toMatchObject({ notes: "Ready", dueDate: "2026-10-01" });
+    expect(firstBoard?.cardsById["card-1"]).toMatchObject({
+      notes: "Ready",
+      dueDate: "2026-10-01",
+      prompt: "Do the first thing.",
+      executionStatus: "not_started",
+      createdBy: "user-1",
+    });
     expect(secondBoard?.cardsById).toEqual({});
 
     await deleteCard(firestore, firstProject.id, { cardId: "card-1" });
     expect((await getProjectBoard(firestore, firstProject.id))?.cardsById).toEqual({});
+  });
+
+  it("should refresh updatedAt when a card is updated", async () => {
+    const project = await createProject(firestore, "Update timestamps");
+    createdProjectIds.push(project.id);
+
+    await addCard(
+      firestore,
+      project.id,
+      { cardId: "card-1", columnId: "todo", title: "Track updatedAt", label: null, prompt: "Do the thing." },
+      "user-1",
+    );
+    const createdBoard = await getProjectBoard(firestore, project.id);
+    const createdUpdatedAt = createdBoard?.cardsById["card-1"]?.updatedAt;
+
+    await updateCard(firestore, project.id, { cardId: "card-1", notes: "Ready", dueDate: null });
+    const updatedBoard = await getProjectBoard(firestore, project.id);
+
+    expect(updatedBoard?.cardsById["card-1"]?.updatedAt).not.toEqual(createdUpdatedAt);
   });
 
   it("should return null for a missing project", async () => {
@@ -103,6 +134,8 @@ describeWithEmulator("Firestore board repository", () => {
       createdAt: "2026-01-07T09:00:00.000Z",
       notes: null,
       dueDate: null,
+      executionStatus: "not_started",
+      createdBy: "demo-seed",
     });
   });
 });

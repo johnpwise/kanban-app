@@ -22,6 +22,10 @@ const board: Board = {
       createdAt: "2026-01-05T09:00:00.000Z",
       notes: null,
       dueDate: null,
+      prompt: "Do the first thing.",
+      executionStatus: "not_started",
+      createdBy: "user-1",
+      updatedAt: "2026-01-05T09:00:00.000Z",
     },
     "card-2": {
       id: "card-2",
@@ -30,6 +34,10 @@ const board: Board = {
       createdAt: "2026-01-06T09:00:00.000Z",
       notes: null,
       dueDate: null,
+      prompt: "Do the second thing.",
+      executionStatus: "not_started",
+      createdBy: "user-1",
+      updatedAt: "2026-01-06T09:00:00.000Z",
     },
   },
 };
@@ -84,10 +92,10 @@ describe("moveCardInBoard", () => {
 describe("addCardToBoard", () => {
   it("should append a new card to the target column", () => {
     // Arrange
-    const request = { cardId: "card-3", columnId: "todo", title: "Third card", label: null };
+    const request = { cardId: "card-3", columnId: "todo", title: "Third card", label: null, prompt: "Do the third thing." };
 
     // Act
-    const result = addCardToBoard(board, request);
+    const result = addCardToBoard(board, request, "user-2");
 
     // Assert
     expect(result.columns.find((column) => column.id === "todo")?.cardIds).toEqual(["card-1", "card-2", "card-3"]);
@@ -97,16 +105,20 @@ describe("addCardToBoard", () => {
       label: null,
       notes: null,
       dueDate: null,
+      prompt: "Do the third thing.",
+      executionStatus: "not_started",
+      createdBy: "user-2",
     });
     expect(result.cardsById["card-3"]?.createdAt).toEqual(expect.any(String));
+    expect(result.cardsById["card-3"]?.updatedAt).toEqual(expect.any(String));
   });
 
   it("should throw when the target column does not exist", () => {
     // Arrange
-    const request = { cardId: "card-3", columnId: "missing-column", title: "Third card", label: null };
+    const request = { cardId: "card-3", columnId: "missing-column", title: "Third card", label: null, prompt: "Do the third thing." };
 
     // Act
-    const addToMissingColumn = () => addCardToBoard(board, request);
+    const addToMissingColumn = () => addCardToBoard(board, request, "user-2");
 
     // Assert
     expect(addToMissingColumn).toThrow('Column "missing-column" was not found on the board.');
@@ -114,10 +126,10 @@ describe("addCardToBoard", () => {
 
   it("should throw when a card with the same id already exists", () => {
     // Arrange
-    const request = { cardId: "card-1", columnId: "todo", title: "Duplicate card", label: null };
+    const request = { cardId: "card-1", columnId: "todo", title: "Duplicate card", label: null, prompt: "Do the third thing." };
 
     // Act
-    const addDuplicateCard = () => addCardToBoard(board, request);
+    const addDuplicateCard = () => addCardToBoard(board, request, "user-2");
 
     // Assert
     expect(addDuplicateCard).toThrow('Card "card-1" already exists on the board.');
@@ -159,6 +171,17 @@ describe("updateCardInBoard", () => {
 
     // Assert
     expect(result.cardsById["card-1"]).toMatchObject({ notes: "Check with design", dueDate: "2026-02-01" });
+  });
+
+  it("should refresh updatedAt on the target card", () => {
+    // Arrange
+    const request = { cardId: "card-1", notes: "Check with design", dueDate: "2026-02-01" };
+
+    // Act
+    const result = updateCardInBoard(board, request);
+
+    // Assert
+    expect(result.cardsById["card-1"]?.updatedAt).not.toEqual(board.cardsById["card-1"]?.updatedAt);
   });
 
   it("should clear the due date when given null", () => {
