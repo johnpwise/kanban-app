@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { dispatchAdaExecutionRequest } from "./index";
+import { acceptAdaExecutionRun, dispatchAdaExecutionRequest } from "./index";
+import { dispatchTopicName } from "./onExecutionRequestCreated";
 
 describe("dispatchAdaExecutionRequest", () => {
   it("should enable retries so transient publish failures are redelivered instead of dropped", () => {
@@ -12,5 +13,20 @@ describe("dispatchAdaExecutionRequest", () => {
       document: "executionRequests/{executionRequestId}",
     });
     expect(dispatchAdaExecutionRequest.__endpoint.region).toEqual(["europe-west2"]);
+  });
+});
+
+describe("acceptAdaExecutionRun", () => {
+  it("should enable retries so transient acceptance failures are redelivered instead of dropped", () => {
+    expect(acceptAdaExecutionRun.__endpoint.eventTrigger?.retry).toBe(true);
+  });
+
+  it("should stay bound to the same configurable topic as the dispatcher, in europe-west2", () => {
+    // Passed as the raw param (not `.value()`) so Firebase's deploy tooling resolves it, per
+    // firebase-functions' own guidance; `.value()` only resolves from `process.env` at runtime.
+    expect(acceptAdaExecutionRun.__endpoint.eventTrigger?.eventFilters).toMatchObject({
+      topic: dispatchTopicName,
+    });
+    expect(acceptAdaExecutionRun.__endpoint.region).toEqual(["europe-west2"]);
   });
 });
