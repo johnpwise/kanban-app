@@ -126,11 +126,15 @@ cmd_setup() {
       --display-name="ADA Executor Runtime"
   fi
 
-  echo "==> Ensuring '$RUNTIME_SA' has roles/datastore.viewer (read-only Firestore, project-level"
-  echo "    is the finest grain Firestore IAM supports) — add-iam-policy-binding is idempotent"
+  echo "==> Ensuring '$RUNTIME_SA' has roles/datastore.user (read/write Firestore, project-level"
+  echo "    is the finest grain Firestore IAM supports) — add-iam-policy-binding is idempotent."
+  echo "    Upgraded from roles/datastore.viewer: the executor's atomic claim (see"
+  echo "    executor/src/executionRunRepository.ts) now performs one conditional Firestore write"
+  echo "    per run via a transaction. This is a live permission increase — do not re-run 'setup'"
+  echo "    against a real project without separate explicit approval for that change."
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:$RUNTIME_SA" \
-    --role="roles/datastore.viewer" \
+    --role="roles/datastore.user" \
     --condition=None \
     >/dev/null
 

@@ -5,7 +5,7 @@ import { exitCodeForOutcome } from "./exitCode";
 describe("exitCodeForOutcome", () => {
   it("returns 0 for a successful outcome", () => {
     // Arrange
-    const outcome = { ok: true as const };
+    const outcome = { ok: true as const, claimed: true };
 
     // Act
     const code = exitCodeForOutcome(outcome);

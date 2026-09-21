@@ -159,6 +159,17 @@ describe("parseExecutionRunDocument", () => {
     expect(act).toThrow();
   });
 
+  it("accepts a document that already carries a claim marker", () => {
+    // Arrange
+    const data = { ...validData(), claim: { claimId: "claim-1", claimedAt: Timestamp.now() } };
+
+    // Act
+    const result = parseExecutionRunDocument("req-1", data);
+
+    // Assert
+    expect(result.claim).toMatchObject({ claimId: "claim-1" });
+  });
+
   it("rejects an incorrect input.eventType", () => {
     // Arrange
     const data = validData();

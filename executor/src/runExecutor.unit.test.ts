@@ -34,7 +34,7 @@ function serializedLogs(calls: ReturnType<typeof createFakeLogger>["calls"]) {
 }
 
 describe("runExecutor", () => {
-  it("returns success for a valid configuration and an accepted run", async () => {
+  it("returns success and claimed:true for a valid configuration and an accepted run", async () => {
     // Arrange
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
@@ -47,7 +47,92 @@ describe("runExecutor", () => {
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: true });
+    expect(outcome).toEqual({ ok: true, claimed: true });
+  });
+
+  it("passes the execution run id and a generated claim id to the repository's claim call", async () => {
+    // Arrange
+    const { repository, claimCalls } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      claimIdFactory: () => "claim-1",
+    });
+
+    // Assert
+    expect(claimCalls).toEqual([{ executionRunId: "req-1", claimId: "claim-1" }]);
+  });
+
+  it("returns ok:true with claimed:false when another executor already owns the claim", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      claim: { claimed: false, reason: "already_claimed" },
+    });
+    const { logger } = createFakeLogger();
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: true, claimed: false });
+  });
+
+  it("logs only safe identifiers when another executor already owns the claim", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      claim: { claimed: false, reason: "already_claimed" },
+    });
+    const { logger, calls } = createFakeLogger();
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger });
+
+    // Assert
+    const infoCall = calls.find((call) => call.level === "info");
+    expect(infoCall?.fields).toMatchObject({
+      executionRequestId: "req-1",
+      correlationId: "corr-1",
+      projectId: "project-1",
+      cardId: "card-1",
+    });
+    expect(serializedLogs(calls)).not.toContain(PROMPT);
+  });
+
+  it("does not attempt to claim a run that fails validation", async () => {
+    // Arrange
+    const { repository, claimCalls } = createFakeExecutionRunRepository({ data: undefined });
+    const { logger } = createFakeLogger();
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger });
+
+    // Assert
+    expect(claimCalls).toEqual([]);
+  });
+
+  it("returns failure when claiming the execution run throws a transient error", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      claimThrowError: new Error("unavailable"),
+    });
+    const { logger } = createFakeLogger();
+
+    // Act
+    const outcome = await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger });
+
+    // Assert
+    expect(outcome.ok).toBe(false);
   });
 
   it("loads the run using the exact execution run id from the environment", async () => {

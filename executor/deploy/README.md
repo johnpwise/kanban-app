@@ -48,14 +48,35 @@ footprint grows enough to need drift detection or multi-environment state.
 | APIs enabled | `run.googleapis.com`, `artifactregistry.googleapis.com`, `iam.googleapis.com`, `cloudbuild.googleapis.com` | project-level, idempotent |
 | Artifact Registry repo | `ada-executor` (docker format) | region: `europe-west2` by default |
 | Service account | `ada-executor-runtime@<project>.iam.gserviceaccount.com` | display name "ADA Executor Runtime" |
-| IAM binding | `roles/datastore.viewer` on the above SA, at project scope | Firestore IAM has no finer grain than project; this is the read-only role — no write/delete permissions |
+| IAM binding | `roles/datastore.user` on the above SA, at project scope | Firestore IAM has no finer grain than project. Upgraded from `roles/datastore.viewer` — see "Runtime permission history" below. |
 | IAM binding | `roles/artifactregistry.writer` for `<project-number>@cloudbuild.gserviceaccount.com`, scoped to the `ada-executor` repo only (not project-wide) | needed only because local Docker is unavailable in the environment this was built in, so `build` falls back to Cloud Build, which needs write access to push the image |
 | Cloud Run Job | `ada-executor` | region `europe-west2`, 1 task, `max-retries=0`, runtime SA above, no persistent `ADA_EXECUTION_RUN_ID` |
 
-No other roles are granted to the runtime service account. It cannot write to Firestore, cannot
-call other GCP APIs, and has no Cloud Run/IAM/Artifact Registry permissions on itself. Cloud
-Build's own default service account is granted nothing beyond write access to this one Artifact
-Registry repository — not the broad project Editor role GCP used to grant it automatically.
+No other roles are granted to the runtime service account. It cannot call other GCP APIs beyond
+Firestore, and has no Cloud Run/IAM/Artifact Registry permissions on itself. Cloud Build's own
+default service account is granted nothing beyond write access to this one Artifact Registry
+repository — not the broad project Editor role GCP used to grant it automatically.
+
+## Runtime permission history
+
+- **Through the executor-shell increment** (`.agent-workflows/ada-cloud-run-executor-shell`): the
+  executor was read-only, so the runtime SA held `roles/datastore.viewer` only.
+- **From the atomic-claim increment** (`.agent-workflows/ada-executor-atomic-claim`): the executor
+  now performs exactly one conditional Firestore write per run — an atomic transactional claim on
+  `executionRuns/{id}` (`claimExecutionRun` in `executor/src/executionRunRepository.ts`) — so the
+  runtime SA needs `datastore.entities.get` + `datastore.entities.update` in addition to read.
+  `roles/datastore.user` is the smallest **predefined** role that covers this (it also grants
+  `create`/`delete`/`allocateIds`/index-list, which this code does not use). A narrower custom role
+  scoped to exactly `get`+`update` was considered and explicitly deferred: this repo intentionally
+  uses a plain provisioning script instead of an IaC tool for its small resource footprint, and a
+  custom IAM role would add a new kind of infra artifact (creation + versioning) disproportionate
+  to closing that permission gap. Revisit if the executor's required permission set stays this
+  narrow long-term and the extra IAM surface becomes worth tightening.
+- Re-running `deploy.sh setup` against a real project applies this upgrade live and requires
+  separate, explicit approval each time per the root `AGENTS.md` Firebase/Firestore safety section
+  — it has **not** been run as part of this increment. The prior `roles/datastore.viewer` binding
+  becomes redundant once `roles/datastore.user` is granted (the latter is a superset); removing the
+  now-redundant binding is a separate, explicit cleanup step, not automated by this script.
 
 ## Region
 
