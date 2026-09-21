@@ -127,10 +127,31 @@ describe("materializeRepositoryWorkspace", () => {
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: false, reason: "clone_failed" });
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.reason).toBe("clone_failed");
     const cloneDestination = touchedPaths.at(-1);
     expect(cloneDestination).toBeDefined();
     await expect(stat(cloneDestination as string)).rejects.toThrow();
+  });
+
+  it("reports the failing git command's exit code when the clone fails, without any raw git output", async () => {
+    // Arrange
+    const nonexistentSource = join(tmpdir(), `ada-executor-missing-${randomUUID()}`);
+
+    // Act
+    const outcome = await materializeRepositoryWorkspace({
+      repository: "owner/repo",
+      baseBranch: "main",
+      runGit,
+      buildCloneUrl: () => nonexistentSource,
+    });
+
+    // Assert
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok || outcome.reason !== "clone_failed") throw new Error("expected clone_failed");
+    expect(["number", "string"]).toContain(typeof outcome.gitErrorCode);
+    expect(outcome).not.toHaveProperty("stderr");
   });
 
   it("fails safely with no fallback when the requested branch does not exist, and leaves no workspace behind", async () => {
@@ -148,9 +169,31 @@ describe("materializeRepositoryWorkspace", () => {
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: false, reason: "checkout_failed" });
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.reason).toBe("checkout_failed");
     const workspacePath = touchedPaths.find((path) => path !== fixture.path);
     expect(workspacePath).toBeDefined();
     await expect(stat(workspacePath as string)).rejects.toThrow();
+  });
+
+  it("reports the failing git command's exit code when the checkout fails, without any raw git output", async () => {
+    // Arrange
+    const fixture = await createFixtureRepository();
+    fixturePaths.push(fixture.path);
+
+    // Act
+    const outcome = await materializeRepositoryWorkspace({
+      repository: "owner/repo",
+      baseBranch: "does-not-exist",
+      runGit,
+      buildCloneUrl: () => fixture.path,
+    });
+
+    // Assert
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok || outcome.reason !== "checkout_failed") throw new Error("expected checkout_failed");
+    expect(["number", "string"]).toContain(typeof outcome.gitErrorCode);
+    expect(outcome).not.toHaveProperty("stderr");
   });
 });

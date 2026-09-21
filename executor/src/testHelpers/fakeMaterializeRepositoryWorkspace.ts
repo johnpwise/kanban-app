@@ -3,6 +3,7 @@ import type { MaterializeRepositoryWorkspace, RepositoryWorkspaceRequest } from 
 export function createFakeMaterializeRepositoryWorkspace(
   behavior: {
     reason?: "workspace_create_failed" | "clone_failed" | "checkout_failed";
+    gitErrorCode?: number | string | null;
     throwError?: Error;
     headSha?: string;
   } = {},
@@ -20,6 +21,9 @@ export function createFakeMaterializeRepositoryWorkspace(
       calls.push(request);
       if (behavior.throwError) {
         throw behavior.throwError;
+      }
+      if (behavior.reason === "clone_failed" || behavior.reason === "checkout_failed") {
+        return { ok: false, reason: behavior.reason, gitErrorCode: behavior.gitErrorCode ?? null };
       }
       if (behavior.reason) {
         return { ok: false, reason: behavior.reason };
