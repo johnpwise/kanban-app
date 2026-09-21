@@ -77,3 +77,8 @@ Before the first deploy, add `FIREBASE_SERVICE_ACCOUNT_JSON` as an encrypted Wor
 **Settings → Variables and Secrets**. Its value must be the complete Firebase service-account JSON
 object. Wrangler validates that the secret exists for both production deploys and preview uploads;
 do not configure `GOOGLE_APPLICATION_CREDENTIALS`, because a Worker cannot read a local file path.
+
+## ADA executor Cloud Run Job deployment
+
+The standalone `executor/` package is provisioned as a Google Cloud Run Job via a checked-in
+script rather than a manual console flow. See [`executor/deploy/README.md`](executor/deploy/README.md).

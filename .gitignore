@@ -25,6 +25,10 @@ functions/lib
 executor/node_modules
 executor/lib
 
+# ADA executor deployment (local operator config + last-built-image marker, no secrets)
+executor/deploy/config.env
+executor/deploy/.last-image
+
 # next.js
 /.next/
 /out/
