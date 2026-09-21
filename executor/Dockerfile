@@ -13,6 +13,9 @@ RUN npm run build
 FROM node:22-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
+# git is a runtime capability (executor performs an HTTPS clone + checkout), not dev tooling — kept
+# to this one minimal, no-recommends install so the image stays close to its prior size.
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/lib ./lib

@@ -4,6 +4,7 @@ import { parseExecutorConfig } from "./config";
 import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
 import type { ExecutionRunRepository } from "./executionRunRepository";
+import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
 
 export interface ExecutorLogger {
   info(message: string, fields?: Record<string, unknown>): void;
@@ -16,6 +17,8 @@ export interface RunExecutorParams {
   env: Record<string, string | undefined>;
   repository: ExecutionRunRepository;
   logger: ExecutorLogger;
+  /** Materialises the immutable input's repository/baseBranch. Only ever called after a winning claim. */
+  materializeRepositoryWorkspace: MaterializeRepositoryWorkspace;
   /** Generates the id persisted with a winning claim. Defaults to `randomUUID`; overridable for tests. */
   claimIdFactory?: () => string;
 }
@@ -30,6 +33,7 @@ export async function runExecutor({
   env,
   repository,
   logger,
+  materializeRepositoryWorkspace,
   claimIdFactory = randomUUID,
 }: RunExecutorParams): Promise<ExecutorOutcome> {
   let executionRunId: string;
@@ -81,6 +85,30 @@ export async function runExecutor({
     return { ok: true, claimed: false };
   }
 
-  logger.info("Accepted execution run loaded and validated successfully.", safeIdentifiers);
+  let workspaceOutcome;
+  try {
+    workspaceOutcome = await materializeRepositoryWorkspace({
+      repository: run.input.repository,
+      baseBranch: run.input.baseBranch,
+    });
+  } catch {
+    logger.error("Unexpected failure materialising the repository workspace.", safeIdentifiers);
+    return { ok: false, reason: "workspace_error" };
+  }
+
+  if (!workspaceOutcome.ok) {
+    logger.error("Failed to materialise the repository workspace.", {
+      ...safeIdentifiers,
+      reason: workspaceOutcome.reason,
+    });
+    return { ok: false, reason: workspaceOutcome.reason };
+  }
+
+  await workspaceOutcome.cleanup();
+
+  logger.info("Accepted execution run loaded and validated successfully.", {
+    ...safeIdentifiers,
+    headSha: workspaceOutcome.workspace.headSha,
+  });
   return { ok: true, claimed: true };
 }
