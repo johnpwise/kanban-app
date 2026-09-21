@@ -1,5 +1,7 @@
 import { createFirestoreExecutionRunRepository } from "./executionRunRepository";
 import { exitCodeForOutcome } from "./exitCode";
+import { runGit } from "./gitProcess";
+import { materializeRepositoryWorkspace } from "./repositoryWorkspace";
 import { runExecutor } from "./runExecutor";
 
 import type { ExecutorLogger } from "./runExecutor";
@@ -26,6 +28,7 @@ async function main(): Promise<void> {
     env: process.env,
     repository: createFirestoreExecutionRunRepository(),
     logger: jsonLogger,
+    materializeRepositoryWorkspace: (request) => materializeRepositoryWorkspace({ ...request, runGit }),
   });
   process.exit(exitCodeForOutcome(outcome));
 }

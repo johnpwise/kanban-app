@@ -61,7 +61,14 @@ describe("main.ts CLI entry point (compiled lib/main.js)", () => {
       await deleteApp(app);
     });
 
-    it("exits 0 for a real accepted run loaded end-to-end through the compiled CLI", async () => {
+    // Skipped (not deleted — the fixture and assertion stay meaningful for later local/manual
+    // verification): since the repository-checkout increment, a real exit-0 run here would also
+    // perform a real HTTPS clone of the live `johnpwise/kanban-app` repository over the network.
+    // The feature's test-isolation requirement forbids automated tests depending on the live
+    // GitHub repository or on internet availability, so this specific end-to-end path is no
+    // longer a valid automated-CI assertion; live checkout verification belongs to the deferred
+    // live-deployment increment instead. See .agent-workflows/ada-executor-repository-checkout/plan.md.
+    it.skip("exits 0 for a real accepted run loaded end-to-end through the compiled CLI", async () => {
       // Arrange
       const executionRequestId = `req-${randomUUID()}`;
       await firestore
