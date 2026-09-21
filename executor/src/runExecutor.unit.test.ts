@@ -376,4 +376,23 @@ describe("runExecutor", () => {
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
   });
+
+  it("logs the safe git exit code alongside the reason when repository materialisation fails with a git failure", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
+      reason: "clone_failed",
+      gitErrorCode: 128,
+    });
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace });
+
+    // Assert
+    const errorCall = calls.find(
+      (call) => call.level === "error" && call.message === "Failed to materialise the repository workspace.",
+    );
+    expect(errorCall?.fields).toMatchObject({ reason: "clone_failed", gitErrorCode: 128 });
+  });
 });

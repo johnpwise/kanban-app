@@ -11,7 +11,14 @@ export interface MaterializedRepositoryWorkspace {
 
 export type MaterializeRepositoryWorkspaceOutcome =
   | { ok: true; workspace: MaterializedRepositoryWorkspace; cleanup: () => Promise<void> }
-  | { ok: false; reason: "workspace_create_failed" | "clone_failed" | "checkout_failed" };
+  | { ok: false; reason: "workspace_create_failed" }
+  | {
+      ok: false;
+      reason: "clone_failed" | "checkout_failed";
+      /** The failing git command's exit code (e.g. 128) or spawn error code (e.g. "ENOENT") —
+       * never the command's stderr, which may contain unsafe content. Safe to log. */
+      gitErrorCode: number | string | null;
+    };
 
 export interface RepositoryWorkspaceRequest {
   /** Already-validated `owner/repo` from the immutable execution run input. */
@@ -68,7 +75,7 @@ export async function materializeRepositoryWorkspace({
   const cloneOutcome = await runGit({ args: ["clone", buildCloneUrl(repository), workspacePath] });
   if (!cloneOutcome.ok) {
     await rm(workspacePath, { recursive: true, force: true });
-    return { ok: false, reason: "clone_failed" };
+    return { ok: false, reason: "clone_failed", gitErrorCode: cloneOutcome.code };
   }
 
   const checkoutOutcome = await runGit({
@@ -77,7 +84,7 @@ export async function materializeRepositoryWorkspace({
   });
   if (!checkoutOutcome.ok) {
     await rm(workspacePath, { recursive: true, force: true });
-    return { ok: false, reason: "checkout_failed" };
+    return { ok: false, reason: "checkout_failed", gitErrorCode: checkoutOutcome.code };
   }
 
   const [branchOutcome, shaOutcome] = await Promise.all([
@@ -87,7 +94,8 @@ export async function materializeRepositoryWorkspace({
   const checkedOutBranch = branchOutcome.ok ? branchOutcome.stdout.trim() : undefined;
   if (!branchOutcome.ok || !shaOutcome.ok || checkedOutBranch !== baseBranch) {
     await rm(workspacePath, { recursive: true, force: true });
-    return { ok: false, reason: "checkout_failed" };
+    const gitErrorCode = !branchOutcome.ok ? branchOutcome.code : !shaOutcome.ok ? shaOutcome.code : null;
+    return { ok: false, reason: "checkout_failed", gitErrorCode };
   }
 
   return {

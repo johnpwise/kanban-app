@@ -100,6 +100,7 @@ export async function runExecutor({
     logger.error("Failed to materialise the repository workspace.", {
       ...safeIdentifiers,
       reason: workspaceOutcome.reason,
+      ...("gitErrorCode" in workspaceOutcome ? { gitErrorCode: workspaceOutcome.gitErrorCode } : {}),
     });
     return { ok: false, reason: workspaceOutcome.reason };
   }

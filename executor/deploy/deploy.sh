@@ -190,9 +190,9 @@ cmd_execute() {
   local run_id="${1:?Usage: deploy.sh execute <executionRunId>}"
 
   echo "==> Executing Cloud Run Job '$JOB_NAME' once, with ADA_EXECUTION_RUN_ID=$run_id"
-  echo "    as a per-execution override only (verify --update-env-vars overrides-only semantics"
-  echo "    against your installed gcloud version's 'gcloud run jobs execute --help' before"
-  echo "    relying on this — the Job's stored definition must remain unchanged after this runs)."
+  echo "    as a per-execution override only — confirmed live (see"
+  echo "    .agent-workflows/ada-executor-repository-checkout-live-validation/step-009.md) that"
+  echo "    this does not modify the Job's stored definition."
   gcloud run jobs execute "$JOB_NAME" \
     --region="$REGION" \
     --project="$PROJECT_ID" \

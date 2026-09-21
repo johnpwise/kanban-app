@@ -14,8 +14,10 @@ FROM node:22-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 # git is a runtime capability (executor performs an HTTPS clone + checkout), not dev tooling — kept
-# to this one minimal, no-recommends install so the image stays close to its prior size.
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+# to this minimal, no-recommends install so the image stays close to its prior size. ca-certificates
+# is required explicitly: it is only a Recommends of git on Debian, so --no-install-recommends
+# leaves git with no CA trust store and every HTTPS clone fails TLS verification.
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/lib ./lib
