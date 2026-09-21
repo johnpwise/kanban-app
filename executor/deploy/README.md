@@ -21,10 +21,15 @@ statuses, Firestore writes from the executor, or Card status changes. See the ro
     built image. **Does not set `ADA_EXECUTION_RUN_ID`** — the Job's persistent definition never
     carries an execution-specific value.
   - `execute <executionRunId>` — run the Job once, supplying `ADA_EXECUTION_RUN_ID` as a
-    per-execution override (`--update-env-vars` on `gcloud run jobs execute`, which — per current
-    Cloud Run docs — overrides for that execution only and does not modify the Job resource;
-    **verify this against your installed `gcloud run jobs execute --help`** before relying on it,
-    since it wasn't possible to confirm against a live `gcloud` install while writing this).
+    per-execution override (`--update-env-vars` on `gcloud run jobs execute`). Confirmed live
+    (`.agent-workflows/ada-executor-repository-checkout-live-validation/step-009.md`): this
+    overrides for that execution only and does not modify the Job resource — the Job's stored
+    definition was verified via `gcloud run jobs describe` to be unchanged, still carrying no
+    `ADA_DEBUG_UNSAFE_GIT_STDERR`, immediately after an `execute` call that passed it as a
+    per-execution override. This is distinct from `gcloud run jobs update --update-env-vars`
+    (used by `deploy-job`'s underlying `gcloud run jobs deploy` machinery and by manual
+    diagnostics), which **merges** into the Job's existing env vars rather than replacing them —
+    also confirmed live in the same step, and the reason `deploy-job` never uses `update` directly.
 - `config.env.example` — the configurable values (project, region, Artifact Registry repo, image
   name, Job name, runtime service account). Copy to `config.env` (gitignored) or export the same
   variable names in your shell.
