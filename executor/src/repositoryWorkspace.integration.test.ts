@@ -152,6 +152,27 @@ describe("materializeRepositoryWorkspace", () => {
     if (outcome.ok || outcome.reason !== "clone_failed") throw new Error("expected clone_failed");
     expect(["number", "string"]).toContain(typeof outcome.gitErrorCode);
     expect(outcome).not.toHaveProperty("stderr");
+    expect(outcome).not.toHaveProperty("unsafeDebugStderr");
+  });
+
+  it("captures the failing clone command's raw stderr only when explicitly opted in via captureUnsafeDebugStderr (temporary diagnostic)", async () => {
+    // Arrange
+    const nonexistentSource = join(tmpdir(), `ada-executor-missing-${randomUUID()}`);
+
+    // Act
+    const outcome = await materializeRepositoryWorkspace({
+      repository: "owner/repo",
+      baseBranch: "main",
+      runGit,
+      buildCloneUrl: () => nonexistentSource,
+      captureUnsafeDebugStderr: true,
+    });
+
+    // Assert
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok || outcome.reason !== "clone_failed") throw new Error("expected clone_failed");
+    expect(typeof outcome.unsafeDebugStderr).toBe("string");
+    expect((outcome.unsafeDebugStderr ?? "").length).toBeGreaterThan(0);
   });
 
   it("fails safely with no fallback when the requested branch does not exist, and leaves no workspace behind", async () => {
@@ -195,5 +216,27 @@ describe("materializeRepositoryWorkspace", () => {
     if (outcome.ok || outcome.reason !== "checkout_failed") throw new Error("expected checkout_failed");
     expect(["number", "string"]).toContain(typeof outcome.gitErrorCode);
     expect(outcome).not.toHaveProperty("stderr");
+    expect(outcome).not.toHaveProperty("unsafeDebugStderr");
+  });
+
+  it("captures the failing checkout command's raw stderr only when explicitly opted in via captureUnsafeDebugStderr (temporary diagnostic)", async () => {
+    // Arrange
+    const fixture = await createFixtureRepository();
+    fixturePaths.push(fixture.path);
+
+    // Act
+    const outcome = await materializeRepositoryWorkspace({
+      repository: "owner/repo",
+      baseBranch: "does-not-exist",
+      runGit,
+      buildCloneUrl: () => fixture.path,
+      captureUnsafeDebugStderr: true,
+    });
+
+    // Assert
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok || outcome.reason !== "checkout_failed") throw new Error("expected checkout_failed");
+    expect(typeof outcome.unsafeDebugStderr).toBe("string");
+    expect((outcome.unsafeDebugStderr ?? "").length).toBeGreaterThan(0);
   });
 });

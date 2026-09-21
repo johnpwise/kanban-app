@@ -18,6 +18,15 @@ export type MaterializeRepositoryWorkspaceOutcome =
       /** The failing git command's exit code (e.g. 128) or spawn error code (e.g. "ENOENT") —
        * never the command's stderr, which may contain unsafe content. Safe to log. */
       gitErrorCode: number | string | null;
+      /**
+       * TEMPORARY DIAGNOSTIC ONLY (live clone_failed root-cause investigation, exit code 128
+       * undiscriminated). Populated only when the caller explicitly opts in via
+       * `captureUnsafeDebugStderr` — absent on the default path. Carries the failing git command's
+       * raw stderr, which is NOT safe to log unconditionally. Revert this field,
+       * `captureUnsafeDebugStderr`, and the `ADA_DEBUG_UNSAFE_GIT_STDERR` env gate in
+       * `runExecutor.ts` once the defect is resolved.
+       */
+      unsafeDebugStderr?: string;
     };
 
 export interface RepositoryWorkspaceRequest {
@@ -25,6 +34,8 @@ export interface RepositoryWorkspaceRequest {
   repository: string;
   /** Already-validated branch name from the immutable execution run input. Authoritative — no fallback. */
   baseBranch: string;
+  /** TEMPORARY DIAGNOSTIC opt-in — see `unsafeDebugStderr` above. Defaults to false/absent. */
+  captureUnsafeDebugStderr?: boolean;
 }
 
 /** The shape `runExecutor` depends on: `runGit`/`buildCloneUrl` are bound once at composition time (see `main.ts`), not per call. */
@@ -64,6 +75,7 @@ export async function materializeRepositoryWorkspace({
   baseBranch,
   runGit,
   buildCloneUrl = defaultBuildCloneUrl,
+  captureUnsafeDebugStderr = false,
 }: MaterializeRepositoryWorkspaceParams): Promise<MaterializeRepositoryWorkspaceOutcome> {
   let workspacePath: string;
   try {
@@ -75,7 +87,12 @@ export async function materializeRepositoryWorkspace({
   const cloneOutcome = await runGit({ args: ["clone", buildCloneUrl(repository), workspacePath] });
   if (!cloneOutcome.ok) {
     await rm(workspacePath, { recursive: true, force: true });
-    return { ok: false, reason: "clone_failed", gitErrorCode: cloneOutcome.code };
+    return {
+      ok: false,
+      reason: "clone_failed",
+      gitErrorCode: cloneOutcome.code,
+      ...(captureUnsafeDebugStderr ? { unsafeDebugStderr: cloneOutcome.stderr } : {}),
+    };
   }
 
   const checkoutOutcome = await runGit({
@@ -84,7 +101,12 @@ export async function materializeRepositoryWorkspace({
   });
   if (!checkoutOutcome.ok) {
     await rm(workspacePath, { recursive: true, force: true });
-    return { ok: false, reason: "checkout_failed", gitErrorCode: checkoutOutcome.code };
+    return {
+      ok: false,
+      reason: "checkout_failed",
+      gitErrorCode: checkoutOutcome.code,
+      ...(captureUnsafeDebugStderr ? { unsafeDebugStderr: checkoutOutcome.stderr } : {}),
+    };
   }
 
   const [branchOutcome, shaOutcome] = await Promise.all([
@@ -95,7 +117,13 @@ export async function materializeRepositoryWorkspace({
   if (!branchOutcome.ok || !shaOutcome.ok || checkedOutBranch !== baseBranch) {
     await rm(workspacePath, { recursive: true, force: true });
     const gitErrorCode = !branchOutcome.ok ? branchOutcome.code : !shaOutcome.ok ? shaOutcome.code : null;
-    return { ok: false, reason: "checkout_failed", gitErrorCode };
+    const unsafeDebugStderr = !branchOutcome.ok ? branchOutcome.stderr : !shaOutcome.ok ? shaOutcome.stderr : undefined;
+    return {
+      ok: false,
+      reason: "checkout_failed",
+      gitErrorCode,
+      ...(captureUnsafeDebugStderr && unsafeDebugStderr !== undefined ? { unsafeDebugStderr } : {}),
+    };
   }
 
   return {

@@ -310,7 +310,9 @@ describe("runExecutor", () => {
     await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace });
 
     // Assert
-    expect(calls).toEqual([{ repository: "johnpwise/kanban-app", baseBranch: "develop" }]);
+    expect(calls).toEqual([
+      { repository: "johnpwise/kanban-app", baseBranch: "develop", captureUnsafeDebugStderr: false },
+    ]);
   });
 
   it("cleans up the materialised workspace exactly once after a successful checkout", async () => {
@@ -394,5 +396,61 @@ describe("runExecutor", () => {
       (call) => call.level === "error" && call.message === "Failed to materialise the repository workspace.",
     );
     expect(errorCall?.fields).toMatchObject({ reason: "clone_failed", gitErrorCode: 128 });
+  });
+
+  it("opts into raw stderr capture only when ADA_DEBUG_UNSAFE_GIT_STDERR=1 is explicitly set (temporary diagnostic)", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace, calls } = createFakeMaterializeRepositoryWorkspace();
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1", ADA_DEBUG_UNSAFE_GIT_STDERR: "1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+    });
+
+    // Assert
+    expect(calls[0]).toMatchObject({ captureUnsafeDebugStderr: true });
+  });
+
+  it("does not opt into raw stderr capture when ADA_DEBUG_UNSAFE_GIT_STDERR is unset", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace, calls } = createFakeMaterializeRepositoryWorkspace();
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace });
+
+    // Assert
+    expect(calls[0]).toMatchObject({ captureUnsafeDebugStderr: false });
+  });
+
+  it("logs the raw git stderr only when ADA_DEBUG_UNSAFE_GIT_STDERR=1 is explicitly set and materialisation fails with a git failure (temporary diagnostic)", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
+      reason: "clone_failed",
+      gitErrorCode: 128,
+      unsafeDebugStderr: "fatal: could not read from remote repository.",
+    });
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1", ADA_DEBUG_UNSAFE_GIT_STDERR: "1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+    });
+
+    // Assert
+    const errorCall = calls.find(
+      (call) => call.level === "error" && call.message === "Failed to materialise the repository workspace.",
+    );
+    expect(errorCall?.fields).toMatchObject({ unsafeDebugStderr: "fatal: could not read from remote repository." });
   });
 });
