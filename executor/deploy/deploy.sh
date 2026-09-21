@@ -89,6 +89,7 @@ cmd_setup() {
     run.googleapis.com \
     artifactregistry.googleapis.com \
     iam.googleapis.com \
+    cloudbuild.googleapis.com \
     --project="$PROJECT_ID"
 
   echo "==> Ensuring Artifact Registry repo '$ARTIFACT_REPO' exists in $REGION"
@@ -102,6 +103,18 @@ cmd_setup() {
       --repository-format=docker \
       --description="ADA executor container images"
   fi
+
+  echo "==> Ensuring Cloud Build's default service account can push into '$ARTIFACT_REPO'"
+  echo "    (scoped to this one repo, not project-wide — needed because local Docker is"
+  echo "    unavailable, so 'build' uses Cloud Build as the fallback build mechanism)"
+  local project_number
+  project_number="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+  gcloud artifacts repositories add-iam-policy-binding "$ARTIFACT_REPO" \
+    --project="$PROJECT_ID" \
+    --location="$REGION" \
+    --member="serviceAccount:${project_number}@cloudbuild.gserviceaccount.com" \
+    --role="roles/artifactregistry.writer" \
+    >/dev/null
 
   local sa_id="${RUNTIME_SA%%@*}"
   echo "==> Ensuring runtime service account '$RUNTIME_SA' exists"

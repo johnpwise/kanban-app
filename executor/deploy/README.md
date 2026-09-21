@@ -45,14 +45,17 @@ footprint grows enough to need drift detection or multi-environment state.
 
 | Resource | Name | Notes |
 | --- | --- | --- |
-| APIs enabled | `run.googleapis.com`, `artifactregistry.googleapis.com`, `iam.googleapis.com` | project-level, idempotent |
+| APIs enabled | `run.googleapis.com`, `artifactregistry.googleapis.com`, `iam.googleapis.com`, `cloudbuild.googleapis.com` | project-level, idempotent |
 | Artifact Registry repo | `ada-executor` (docker format) | region: `europe-west2` by default |
 | Service account | `ada-executor-runtime@<project>.iam.gserviceaccount.com` | display name "ADA Executor Runtime" |
 | IAM binding | `roles/datastore.viewer` on the above SA, at project scope | Firestore IAM has no finer grain than project; this is the read-only role — no write/delete permissions |
+| IAM binding | `roles/artifactregistry.writer` for `<project-number>@cloudbuild.gserviceaccount.com`, scoped to the `ada-executor` repo only (not project-wide) | needed only because local Docker is unavailable in the environment this was built in, so `build` falls back to Cloud Build, which needs write access to push the image |
 | Cloud Run Job | `ada-executor` | region `europe-west2`, 1 task, `max-retries=0`, runtime SA above, no persistent `ADA_EXECUTION_RUN_ID` |
 
 No other roles are granted to the runtime service account. It cannot write to Firestore, cannot
-call other GCP APIs, and has no Cloud Run/IAM/Artifact Registry permissions on itself.
+call other GCP APIs, and has no Cloud Run/IAM/Artifact Registry permissions on itself. Cloud
+Build's own default service account is granted nothing beyond write access to this one Artifact
+Registry repository — not the broad project Editor role GCP used to grant it automatically.
 
 ## Region
 
