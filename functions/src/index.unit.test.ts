@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { acceptAdaExecutionRun, dispatchAdaExecutionRequest } from "./index";
+import { acceptAdaExecutionRun, dispatchAdaExecutionRequest, launchAdaExecutionRun } from "./index";
 import { dispatchTopicName } from "./onExecutionRequestCreated";
 
 describe("dispatchAdaExecutionRequest", () => {
@@ -28,5 +28,24 @@ describe("acceptAdaExecutionRun", () => {
       topic: dispatchTopicName,
     });
     expect(acceptAdaExecutionRun.__endpoint.region).toEqual(["europe-west2"]);
+  });
+});
+
+describe("launchAdaExecutionRun", () => {
+  it("should enable retries so a transient launch failure is redelivered instead of dropped", () => {
+    expect(launchAdaExecutionRun.__endpoint.eventTrigger?.retry).toBe(true);
+  });
+
+  it("should stay bound to the executionRuns collection in europe-west2", () => {
+    expect(launchAdaExecutionRun.__endpoint.eventTrigger?.eventFilterPathPatterns).toMatchObject({
+      document: "executionRuns/{executionRequestId}",
+    });
+    expect(launchAdaExecutionRun.__endpoint.region).toEqual(["europe-west2"]);
+  });
+
+  it("should run as the SA granted permission to launch the ada-executor Cloud Run Job", () => {
+    expect(launchAdaExecutionRun.__endpoint.serviceAccountEmail).toEqual(
+      "ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com",
+    );
   });
 });
