@@ -42,4 +42,10 @@ describe("launchAdaExecutionRun", () => {
     });
     expect(launchAdaExecutionRun.__endpoint.region).toEqual(["europe-west2"]);
   });
+
+  it("should run as the SA granted permission to launch the ada-executor Cloud Run Job", () => {
+    expect(launchAdaExecutionRun.__endpoint.serviceAccountEmail).toEqual(
+      "ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com",
+    );
+  });
 });

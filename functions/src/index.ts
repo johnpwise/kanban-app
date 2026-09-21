@@ -67,6 +67,11 @@ export const launchAdaExecutionRun = onDocumentCreated(
     // logged and acknowledged inside the handler instead, so it is never retried forever.
     // https://firebase.google.com/docs/functions/retries
     retry: true,
+    // Must run as the SA granted `roles/run.jobsExecutorWithOverrides` on the `ada-executor` Cloud
+    // Run Job — the default compute SA has no IAM binding on that Job at all. Without this, every
+    // launch attempt fails with PERMISSION_DENIED (classified as permanent, logged and acked, the
+    // Job never actually runs).
+    serviceAccount: "ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com",
   },
   async (event) => {
     await launchExecutionRun({
