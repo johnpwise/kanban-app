@@ -4,8 +4,6 @@ export function createFakeMaterializeRepositoryWorkspace(
   behavior: {
     reason?: "workspace_create_failed" | "clone_failed" | "checkout_failed";
     gitErrorCode?: number | string | null;
-    /** TEMPORARY DIAGNOSTIC ONLY — see repositoryWorkspace.ts's unsafeDebugStderr. */
-    unsafeDebugStderr?: string;
     throwError?: Error;
     headSha?: string;
   } = {},
@@ -25,12 +23,7 @@ export function createFakeMaterializeRepositoryWorkspace(
         throw behavior.throwError;
       }
       if (behavior.reason === "clone_failed" || behavior.reason === "checkout_failed") {
-        return {
-          ok: false,
-          reason: behavior.reason,
-          gitErrorCode: behavior.gitErrorCode ?? null,
-          ...(behavior.unsafeDebugStderr !== undefined ? { unsafeDebugStderr: behavior.unsafeDebugStderr } : {}),
-        };
+        return { ok: false, reason: behavior.reason, gitErrorCode: behavior.gitErrorCode ?? null };
       }
       if (behavior.reason) {
         return { ok: false, reason: behavior.reason };

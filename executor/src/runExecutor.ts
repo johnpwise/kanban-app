@@ -90,8 +90,6 @@ export async function runExecutor({
     workspaceOutcome = await materializeRepositoryWorkspace({
       repository: run.input.repository,
       baseBranch: run.input.baseBranch,
-      // TEMPORARY DIAGNOSTIC opt-in (live clone_failed investigation) — revert once resolved.
-      captureUnsafeDebugStderr: env.ADA_DEBUG_UNSAFE_GIT_STDERR === "1",
     });
   } catch {
     logger.error("Unexpected failure materialising the repository workspace.", safeIdentifiers);
@@ -103,7 +101,6 @@ export async function runExecutor({
       ...safeIdentifiers,
       reason: workspaceOutcome.reason,
       ...("gitErrorCode" in workspaceOutcome ? { gitErrorCode: workspaceOutcome.gitErrorCode } : {}),
-      ...("unsafeDebugStderr" in workspaceOutcome ? { unsafeDebugStderr: workspaceOutcome.unsafeDebugStderr } : {}),
     });
     return { ok: false, reason: workspaceOutcome.reason };
   }
