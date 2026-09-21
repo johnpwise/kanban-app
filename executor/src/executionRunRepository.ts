@@ -1,13 +1,24 @@
 import { getApp, initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 
 import type { Firestore } from "firebase-admin/firestore";
 
 const EXECUTION_RUNS_COLLECTION = "executionRuns";
 
+export type ClaimExecutionRunOutcome = { claimed: true } | { claimed: false; reason: "already_claimed" };
+
 export interface ExecutionRunRepository {
   /** Returns the raw document data, or `undefined` if no such document exists. Never writes. */
   loadExecutionRunData(executionRunId: string): Promise<unknown | undefined>;
+  /**
+   * Atomically claims `executionRuns/{executionRunId}` for exactly one caller: if no `claim`
+   * field is present yet, sets `{ claimId, claimedAt }` and returns `{ claimed: true }`; if a
+   * `claim` is already present (this call or a concurrent one committed first), returns
+   * `{ claimed: false }` without writing. The read-check-write happens inside a single Firestore
+   * transaction, so there is no window between checking and writing for a second caller to race
+   * into.
+   */
+  claimExecutionRun(executionRunId: string, claimId: string): Promise<ClaimExecutionRunOutcome>;
 }
 
 let firestore: Firestore | undefined;
@@ -36,6 +47,24 @@ export function createFirestoreExecutionRunRepository(): ExecutionRunRepository 
     async loadExecutionRunData(executionRunId: string) {
       const snapshot = await getExecutionRunFirestore().collection(EXECUTION_RUNS_COLLECTION).doc(executionRunId).get();
       return snapshot.exists ? snapshot.data() : undefined;
+    },
+
+    async claimExecutionRun(executionRunId: string, claimId: string) {
+      const firestore = getExecutionRunFirestore();
+      const docRef = firestore.collection(EXECUTION_RUNS_COLLECTION).doc(executionRunId);
+
+      return firestore.runTransaction<ClaimExecutionRunOutcome>(async (transaction) => {
+        const snapshot = await transaction.get(docRef);
+        const existingClaim = (snapshot.data() as { claim?: unknown } | undefined)?.claim;
+        if (!snapshot.exists || existingClaim) {
+          return { claimed: false, reason: "already_claimed" };
+        }
+
+        transaction.update(docRef, {
+          claim: { claimId, claimedAt: FieldValue.serverTimestamp() },
+        });
+        return { claimed: true };
+      });
     },
   };
 }

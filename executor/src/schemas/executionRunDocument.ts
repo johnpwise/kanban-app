@@ -46,6 +46,12 @@ const executionRunInputSchema = z.object({
   requestedAt: z.iso.datetime(),
 });
 
+/** The durable ownership marker written by a winning atomic claim (see `executionRunRepository.ts`). */
+const executionRunClaimSchema = z.object({
+  claimId: z.string().min(1),
+  claimedAt: z.instanceof(Timestamp),
+});
+
 /** Shape of an `executionRuns/{executionRequestId}` Firestore document's data. */
 const executionRunDocumentSchema = z.object({
   executionRequestId: z.string().min(1),
@@ -56,6 +62,7 @@ const executionRunDocumentSchema = z.object({
   acceptedAt: z.instanceof(Timestamp),
   firstMessageId: z.string().min(1).optional(),
   input: executionRunInputSchema,
+  claim: executionRunClaimSchema.optional(),
 });
 
 export type ExecutionRunInput = z.infer<typeof executionRunInputSchema>;

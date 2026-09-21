@@ -66,7 +66,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: true });
+    expect(outcome).toEqual({ ok: true, claimed: true });
   });
 
   it("fails clearly for a missing document", async () => {
@@ -100,7 +100,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
     expect(outcome.ok).toBe(false);
   });
 
-  it("leaves the execution run document byte-for-byte unchanged after a successful run", async () => {
+  it("leaves the immutable input unchanged and records a claim marker after a winning run", async () => {
     // Arrange
     const executionRequestId = `req-${randomUUID()}`;
     const runData = acceptedRunData({ executionRequestId, projectId: "project-1", cardId: "card-1" });
@@ -108,15 +108,89 @@ describeWithEmulator("executor against the Firestore emulator", () => {
     await docRef.set(runData);
 
     // Act
-    await runExecutor({
+    const outcome = await runExecutor({
       env: { ADA_EXECUTION_RUN_ID: executionRequestId },
       repository: createFirestoreExecutionRunRepository(),
       logger: silentLogger,
+      claimIdFactory: () => "claim-1",
     });
 
     // Assert
-    const snapshot = await docRef.get();
-    expect(snapshot.data()).toEqual(runData);
+    expect(outcome).toEqual({ ok: true, claimed: true });
+    const data = (await docRef.get()).data();
+    expect(data?.input).toEqual(runData.input);
+    expect(data?.status).toBe("accepted");
+    expect(data?.claim).toMatchObject({ claimId: "claim-1" });
+    expect(data?.claim?.claimedAt).toBeInstanceOf(Timestamp);
+  });
+
+  it("given two concurrent executor attempts for the same run, exactly one wins the claim", async () => {
+    // Arrange
+    const executionRequestId = `req-${randomUUID()}`;
+    const runData = acceptedRunData({ executionRequestId, projectId: "project-1", cardId: "card-1" });
+    const docRef = firestore.collection("executionRuns").doc(executionRequestId);
+    await docRef.set(runData);
+
+    // Act
+    const [outcomeA, outcomeB] = await Promise.all([
+      runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: executionRequestId },
+        repository: createFirestoreExecutionRunRepository(),
+        logger: silentLogger,
+        claimIdFactory: () => "attempt-A",
+      }),
+      runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: executionRequestId },
+        repository: createFirestoreExecutionRunRepository(),
+        logger: silentLogger,
+        claimIdFactory: () => "attempt-B",
+      }),
+    ]);
+
+    // Assert
+    const outcomes = [outcomeA, outcomeB];
+    expect(outcomes.filter((outcome) => outcome.ok && outcome.claimed)).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.ok && !outcome.claimed)).toHaveLength(1);
+
+    const winningClaimId = outcomeA.ok && outcomeA.claimed ? "attempt-A" : "attempt-B";
+    const data = (await docRef.get()).data();
+    expect(data?.claim).toMatchObject({ claimId: winningClaimId });
+    expect(data?.input).toEqual(runData.input);
+  });
+
+  it("a duplicate executor observing an existing claim performs no writes and does not touch the Card", async () => {
+    // Arrange
+    const executionRequestId = `req-${randomUUID()}`;
+    const cardProjectId = `project-${randomUUID()}`;
+    const cardId = `card-${randomUUID()}`;
+    const runData = acceptedRunData({ executionRequestId, projectId: cardProjectId, cardId });
+    const docRef = firestore.collection("executionRuns").doc(executionRequestId);
+    await docRef.set(runData);
+    const repository = createFirestoreExecutionRunRepository();
+    await repository.claimExecutionRun(executionRequestId, "first-claim");
+    const claimedSnapshotBefore = (await docRef.get()).data();
+
+    const cardRef = firestore.doc(`projects/${cardProjectId}/cards/${cardId}`);
+    const cardFixture = { title: "Ship the demo", executionStatus: "queued", updatedAt: Timestamp.now() };
+    await cardRef.set(cardFixture);
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: executionRequestId },
+      repository,
+      logger: silentLogger,
+      claimIdFactory: () => "second-claim",
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: true, claimed: false });
+    const data = (await docRef.get()).data();
+    expect(data).toEqual(claimedSnapshotBefore);
+    expect(data?.claim).toMatchObject({ claimId: "first-claim" });
+    const cardSnapshot = await cardRef.get();
+    expect(cardSnapshot.data()).toEqual(cardFixture);
+
+    await cardRef.delete();
   });
 
   it("leaves the related Card unchanged and queued after a successful run", async () => {
@@ -143,7 +217,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: true });
+    expect(outcome).toEqual({ ok: true, claimed: true });
     const cardSnapshot = await cardRef.get();
     expect(cardSnapshot.data()).toEqual(cardFixture);
     expect(cardSnapshot.data()?.executionStatus).toBe("queued");

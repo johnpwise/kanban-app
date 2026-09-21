@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { parseExecutorConfig } from "./config";
 import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
@@ -8,12 +10,14 @@ export interface ExecutorLogger {
   error(message: string, fields?: Record<string, unknown>): void;
 }
 
-export type ExecutorOutcome = { ok: true } | { ok: false; reason: string };
+export type ExecutorOutcome = { ok: true; claimed: boolean } | { ok: false; reason: string };
 
 export interface RunExecutorParams {
   env: Record<string, string | undefined>;
   repository: ExecutionRunRepository;
   logger: ExecutorLogger;
+  /** Generates the id persisted with a winning claim. Defaults to `randomUUID`; overridable for tests. */
+  claimIdFactory?: () => string;
 }
 
 /**
@@ -22,7 +26,12 @@ export interface RunExecutorParams {
  * Job container communicates failure to its caller purely through its process exit code (see
  * `main.ts`), so there is no redelivery concept here to preserve by rethrowing.
  */
-export async function runExecutor({ env, repository, logger }: RunExecutorParams): Promise<ExecutorOutcome> {
+export async function runExecutor({
+  env,
+  repository,
+  logger,
+  claimIdFactory = randomUUID,
+}: RunExecutorParams): Promise<ExecutorOutcome> {
   let executionRunId: string;
   try {
     executionRunId = parseExecutorConfig(env).executionRunId;
@@ -52,11 +61,26 @@ export async function runExecutor({ env, repository, logger }: RunExecutorParams
     return { ok: false, reason: "invalid_run" };
   }
 
-  logger.info("Accepted execution run loaded and validated successfully.", {
+  let claimOutcome;
+  try {
+    claimOutcome = await repository.claimExecutionRun(executionRunId, claimIdFactory());
+  } catch {
+    logger.error("Transient failure claiming the execution run.", { executionRunId });
+    return { ok: false, reason: "claim_error" };
+  }
+
+  const safeIdentifiers = {
     executionRequestId: run.executionRequestId,
     correlationId: run.correlationId,
     projectId: run.projectId,
     cardId: run.cardId,
-  });
-  return { ok: true };
+  };
+
+  if (!claimOutcome.claimed) {
+    logger.info("Execution run already claimed by another executor; exiting safely.", safeIdentifiers);
+    return { ok: true, claimed: false };
+  }
+
+  logger.info("Accepted execution run loaded and validated successfully.", safeIdentifiers);
+  return { ok: true, claimed: true };
 }
