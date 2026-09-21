@@ -108,8 +108,23 @@ After running, verify (see root request / workflow artifact for the full checkli
   --region=europe-west2`)
 - Cloud Logging for that execution contains only `executionRequestId` / `correlationId` /
   `projectId` / `cardId` — no prompt, no full document body, no credentials
-- the `executionRuns/{id}` document and the related Card are byte-for-byte unchanged
-- no other Firestore documents were written
+
+**Expected write** (first executor to run against a given `executionRuns/{id}`): exactly one
+conditional/transactional update adding a `claim: { claimId, claimedAt }` field
+(`claimExecutionRun` in `executor/src/executionRunRepository.ts`), where `claimedAt` is a
+server-derived timestamp. No other field on the document changes.
+
+**Must remain unchanged** (always, on every run): the document's `input` (the original execution
+request payload), its execution identity fields (`executionRequestId`, `correlationId`,
+`projectId`, `cardId`), the related Project, and the related Card other than its pre-existing
+`queued` transition (which happens earlier, before the executor runs). No other Firestore document
+is written.
+
+**Duplicate executor** (any run after the first has already claimed the document): the
+transactional claim read finds the existing `claim` field, returns `{claimed: false}` without
+writing, and the executor logs "Execution run already claimed by another executor; exiting
+safely" with the same safe identifiers, then exits successfully. The existing claim is left
+untouched.
 
 ## Prerequisites this script does not install for you
 
