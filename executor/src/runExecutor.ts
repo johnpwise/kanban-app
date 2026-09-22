@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 
 import { parseExecutorConfig } from "./config";
+import { noopDownstreamWork } from "./downstreamWork";
 import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
 import type { ExecutionRunRepository } from "./executionRunRepository";
+import type { RunDownstreamWork } from "./downstreamWork";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
 
 export interface ExecutorLogger {
@@ -19,6 +21,12 @@ export interface RunExecutorParams {
   logger: ExecutorLogger;
   /** Materialises the immutable input's repository/baseBranch. Only ever called after a winning claim. */
   materializeRepositoryWorkspace: MaterializeRepositoryWorkspace;
+  /**
+   * Runs against the still-live workspace, after `sourceRevision` is durably persisted and before
+   * cleanup. Defaults to a no-op; overridable so a future ADA capability can plug in real
+   * workspace-scoped work without changing this composition.
+   */
+  runDownstreamWork?: RunDownstreamWork;
   /** Generates the id persisted with a winning claim. Defaults to `randomUUID`; overridable for tests. */
   claimIdFactory?: () => string;
 }
@@ -34,6 +42,7 @@ export async function runExecutor({
   repository,
   logger,
   materializeRepositoryWorkspace,
+  runDownstreamWork = noopDownstreamWork,
   claimIdFactory = randomUUID,
 }: RunExecutorParams): Promise<ExecutorOutcome> {
   let executionRunId: string;
@@ -122,6 +131,13 @@ export async function runExecutor({
         headSha,
       });
       return { ok: false, reason: "source_revision_conflict" };
+    }
+
+    try {
+      await runDownstreamWork({ workspacePath: workspaceOutcome.workspace.path, headSha });
+    } catch {
+      logger.error("Unexpected failure during downstream workspace-scoped work.", safeIdentifiers);
+      return { ok: false, reason: "downstream_work_error" };
     }
 
     logger.info("Accepted execution run loaded and validated successfully.", {
