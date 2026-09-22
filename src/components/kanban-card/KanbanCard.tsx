@@ -128,7 +128,7 @@ export default function KanbanCard({
           {card.dueDate && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
               <Calendar className="h-3 w-3" aria-hidden="true" />
-              {new Date(card.dueDate).toLocaleDateString(undefined, { timeZone: "UTC" })}
+              {new Date(card.dueDate).toLocaleDateString("en-US", { timeZone: "UTC" })}
             </span>
           )}
           {card.notes && (

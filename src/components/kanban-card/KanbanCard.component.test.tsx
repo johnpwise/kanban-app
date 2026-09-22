@@ -312,4 +312,49 @@ describe("KanbanCard", () => {
       expect(screen.getByText("9/23/2026")).toBeVisible();
     });
   });
+
+  describe("due date rendering (regression: locale-dependent formatting, live-verification follow-up)", () => {
+    it("should format the due date with an explicit, pinned locale rather than the runtime default", () => {
+      // Arrange
+      // Date.prototype.toLocaleDateString's `undefined` locale argument resolves to the
+      // *runtime's* default locale. Cloudflare Workers SSR and a visitor's browser can
+      // have different default locales (e.g. en-US vs en-GB), which formats the same
+      // instant as different text ("9/23/2026" vs "23/09/2026") — an SSR/CSR divergence
+      // of the same class that caused hydration mismatch #418, independent of the
+      // timezone fix. Pinning an explicit locale removes this runtime dependency.
+      const toLocaleDateStringSpy = vi.spyOn(Date.prototype, "toLocaleDateString");
+      const card = {
+        id: "card-1",
+        title: "Ship the demo",
+        label: null,
+        createdAt: "2026-01-05T09:00:00.000Z",
+        notes: null,
+        dueDate: "2026-09-23",
+        prompt: "Ship the demo build.",
+        executionStatus: "not_started" as const,
+        createdBy: "user-1",
+        updatedAt: "2026-01-05T09:00:00.000Z",
+      };
+
+      // Act
+      render(
+        <KanbanCard
+          card={card}
+          columns={columns}
+          currentColumnId="todo"
+          onMove={vi.fn()}
+          onDelete={vi.fn()}
+          onReorder={vi.fn()}
+          onOpenCard={vi.fn()}
+          canMoveUp={true}
+          canMoveDown={true}
+        />,
+      );
+
+      // Assert
+      expect(toLocaleDateStringSpy).toHaveBeenCalledWith("en-US", { timeZone: "UTC" });
+
+      toLocaleDateStringSpy.mockRestore();
+    });
+  });
 });
