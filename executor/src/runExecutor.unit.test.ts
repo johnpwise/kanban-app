@@ -5,6 +5,7 @@ import { runExecutor } from "./runExecutor";
 import { createFakeExecutionRunRepository } from "./testHelpers/fakeExecutionRunRepository";
 import { createFakeLogger } from "./testHelpers/fakeLogger";
 import { createFakeMaterializeRepositoryWorkspace } from "./testHelpers/fakeMaterializeRepositoryWorkspace";
+import { createFakeRunDownstreamWork } from "./testHelpers/fakeRunDownstreamWork";
 
 const PROMPT = "Do not leak this prompt text into any log line.";
 
@@ -591,6 +592,123 @@ describe("runExecutor", () => {
 
     // Assert
     expect(cleanupCallCount()).toBe(1);
+  });
+
+  it("invokes downstream work with the live workspace path and resolved head SHA, before cleanup runs", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace({
+      headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    });
+    let cleanupCallCountAtInvocation = -1;
+    const { runDownstreamWork, calls } = createFakeRunDownstreamWork({
+      onCall: () => {
+        cleanupCallCountAtInvocation = cleanupCallCount();
+      },
+    });
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      runDownstreamWork,
+    });
+
+    // Assert
+    expect(calls).toEqual([
+      { workspacePath: "/tmp/fake-workspace", headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" },
+    ]);
+    expect(cleanupCallCountAtInvocation).toBe(0);
+  });
+
+  it("cleans up the workspace exactly once after downstream work completes successfully", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+    const { runDownstreamWork } = createFakeRunDownstreamWork();
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      runDownstreamWork,
+    });
+
+    // Assert
+    expect(cleanupCallCount()).toBe(1);
+  });
+
+  it("cleans up the workspace exactly once, and returns a safe failure outcome, when downstream work throws", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls: logCalls } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+    const { runDownstreamWork } = createFakeRunDownstreamWork({
+      throwError: new Error("unsafe downstream failure detail"),
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      runDownstreamWork,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "downstream_work_error" });
+    expect(cleanupCallCount()).toBe(1);
+    expect(serializedLogs(logCalls)).not.toContain("unsafe downstream failure detail");
+  });
+
+  it("does not invoke downstream work when repository materialisation fails", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "clone_failed" });
+    const { runDownstreamWork, calls } = createFakeRunDownstreamWork();
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      runDownstreamWork,
+    });
+
+    // Assert
+    expect(calls).toEqual([]);
+  });
+
+  it("does not invoke downstream work when another executor already owns the claim", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      claim: { claimed: false, reason: "already_claimed" },
+    });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+    const { runDownstreamWork, calls } = createFakeRunDownstreamWork();
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      runDownstreamWork,
+    });
+
+    // Assert
+    expect(calls).toEqual([]);
   });
 
   it("never logs the prompt when recording the source revision fails", async () => {
