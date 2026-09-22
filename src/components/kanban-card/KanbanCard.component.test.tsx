@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import KanbanCard from "./KanbanCard";
 import { KANBAN_CARD_TEST_IDS } from "./KanbanCard.testIds";
@@ -261,5 +261,55 @@ describe("KanbanCard", () => {
 
     // Assert
     expect(onOpenCard).toHaveBeenCalledOnce();
+  });
+
+  describe("due date rendering (regression: hydration text mismatch, PR follow-up)", () => {
+    let originalTz: string | undefined;
+
+    beforeEach(() => {
+      originalTz = process.env.TZ;
+      // A timezone behind UTC: a UTC-midnight instant for a date-only string
+      // falls on the *previous* local calendar day here, which is exactly the
+      // divergence that produced server/client hydration mismatch #418.
+      process.env.TZ = "America/Los_Angeles";
+    });
+
+    afterEach(() => {
+      process.env.TZ = originalTz;
+    });
+
+    it("should render the due-date badge using the stored calendar day, not a timezone-shifted day", () => {
+      // Arrange
+      const card = {
+        id: "card-1",
+        title: "Ship the demo",
+        label: null,
+        createdAt: "2026-01-05T09:00:00.000Z",
+        notes: null,
+        dueDate: "2026-09-23",
+        prompt: "Ship the demo build.",
+        executionStatus: "not_started" as const,
+        createdBy: "user-1",
+        updatedAt: "2026-01-05T09:00:00.000Z",
+      };
+
+      // Act
+      render(
+        <KanbanCard
+          card={card}
+          columns={columns}
+          currentColumnId="todo"
+          onMove={vi.fn()}
+          onDelete={vi.fn()}
+          onReorder={vi.fn()}
+          onOpenCard={vi.fn()}
+          canMoveUp={true}
+          canMoveDown={true}
+        />,
+      );
+
+      // Assert
+      expect(screen.getByText("9/23/2026")).toBeVisible();
+    });
   });
 });
