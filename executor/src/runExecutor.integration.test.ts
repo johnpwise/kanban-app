@@ -12,9 +12,11 @@ import { createFirestoreExecutionRunRepository } from "./executionRunRepository"
 import { runGit } from "./gitProcess";
 import { materializeRepositoryWorkspace } from "./repositoryWorkspace";
 import { runExecutor } from "./runExecutor";
+import { inspectWorkingTree } from "./workingTreeInspection";
 
 import type { ExecutorLogger } from "./runExecutor";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
+import type { InspectWorkingTree } from "./workingTreeInspection";
 
 const firestoreEmulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
 const describeWithEmulator = firestoreEmulatorHost ? describe : describe.skip;
@@ -49,6 +51,9 @@ async function createFixtureRepository(): Promise<{ path: string; headSha: strin
 function localMaterializeRepositoryWorkspace(fixturePath: string): MaterializeRepositoryWorkspace {
   return (request) => materializeRepositoryWorkspace({ ...request, runGit, buildCloneUrl: () => fixturePath });
 }
+
+/** Binds the real `inspectWorkingTree` to the real `runGit`, exercising the actual `git status` invocation. */
+const localInspectWorkingTree: InspectWorkingTree = (request) => inspectWorkingTree({ ...request, runGit });
 
 function acceptedRunData(overrides: { executionRequestId: string; projectId: string; cardId: string }) {
   return {
@@ -100,10 +105,11 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       repository: createFirestoreExecutionRunRepository(),
       logger: silentLogger,
       materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
+      inspectWorkingTree: localInspectWorkingTree,
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: true, claimed: true });
+    expect(outcome).toEqual({ ok: true, claimed: true, workingTree: "clean" });
   });
 
   it("fails clearly for a missing document", async () => {
@@ -150,11 +156,12 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       repository: createFirestoreExecutionRunRepository(),
       logger: silentLogger,
       materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
+      inspectWorkingTree: localInspectWorkingTree,
       claimIdFactory: () => "claim-1",
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: true, claimed: true });
+    expect(outcome).toEqual({ ok: true, claimed: true, workingTree: "clean" });
     const data = (await docRef.get()).data();
     expect(data?.input).toEqual(runData.input);
     expect(data?.status).toBe("accepted");
@@ -176,6 +183,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
         repository: createFirestoreExecutionRunRepository(),
         logger: silentLogger,
         materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
+        inspectWorkingTree: localInspectWorkingTree,
         claimIdFactory: () => "attempt-A",
       }),
       runExecutor({
@@ -183,6 +191,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
         repository: createFirestoreExecutionRunRepository(),
         logger: silentLogger,
         materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
+        inspectWorkingTree: localInspectWorkingTree,
         claimIdFactory: () => "attempt-B",
       }),
     ]);
@@ -255,10 +264,11 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       repository: createFirestoreExecutionRunRepository(),
       logger: silentLogger,
       materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
+      inspectWorkingTree: localInspectWorkingTree,
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: true, claimed: true });
+    expect(outcome).toEqual({ ok: true, claimed: true, workingTree: "clean" });
     const cardSnapshot = await cardRef.get();
     expect(cardSnapshot.data()).toEqual(cardFixture);
     expect(cardSnapshot.data()?.executionStatus).toBe("queued");
@@ -281,6 +291,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       repository: createFirestoreExecutionRunRepository(),
       logger: silentLogger,
       materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
+      inspectWorkingTree: localInspectWorkingTree,
       invokeCodingAgent: async ({ executionRequestId: invokedExecutionRequestId, workspace }) => {
         observedInvocation = { executionRequestId: invokedExecutionRequestId, path: workspace.path };
         await stat(workspace.path);
@@ -290,10 +301,32 @@ describeWithEmulator("executor against the Firestore emulator", () => {
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: true, claimed: true });
+    expect(outcome).toEqual({ ok: true, claimed: true, workingTree: "clean" });
     expect(workspaceExistedDuringInvocation).toBe(true);
     expect(observedInvocation?.executionRequestId).toBe(executionRequestId);
     expect(observedInvocation?.path).toBeDefined();
     await expect(stat(observedInvocation?.path as string)).rejects.toThrow();
+  });
+
+  it("reports workingTree:'changes_detected' end-to-end when the coding agent writes a new file into the real workspace", async () => {
+    // Arrange
+    const executionRequestId = `req-${randomUUID()}`;
+    const runData = acceptedRunData({ executionRequestId, projectId: "project-1", cardId: "card-1" });
+    await firestore.collection("executionRuns").doc(executionRequestId).set(runData);
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: executionRequestId },
+      repository: createFirestoreExecutionRunRepository(),
+      logger: silentLogger,
+      materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
+      inspectWorkingTree: localInspectWorkingTree,
+      invokeCodingAgent: async ({ workspace }) => {
+        await writeFile(join(workspace.path, "generated-by-agent.txt"), "content\n");
+      },
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: true, claimed: true, workingTree: "changes_detected" });
   });
 });
