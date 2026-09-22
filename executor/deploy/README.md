@@ -1,13 +1,19 @@
 # ADA executor — Cloud Run Job provisioning
 
 Provisions the existing `executor/` container as a Google Cloud Run **Job** and lets you run it
-once, manually, with a specific `executionRuns/{id}`. This establishes and proves the execution
-*target* only.
+manually, on demand, with a specific `executionRuns/{id}` — independent of automatic triggering.
+This establishes and proves the execution *target* only.
 
-**Not included here, and not to be added here without a separate increment:** anything that
-triggers the Job automatically (the Pub/Sub consumer, a Function, a scheduler), new Execution Run
-statuses, Firestore writes from the executor, or Card status changes. See the root
-[`AGENTS.md`](../../AGENTS.md) / project ADA history for that boundary.
+**Not included here:** the automatic trigger itself. That lives in `functions/` as a separate
+increment — `launchAdaExecutionRun` ([functions/src/index.ts](../../functions/src/index.ts)) is an
+Eventarc-backed Cloud Function that fires on every `executionRuns/{id}` document creation and calls
+the Cloud Run Admin API to run this Job, the same way `execute` below does. So in practice, any
+`executionRuns` document — however it's created — is very likely to launch this Job automatically,
+whether or not you ever call `execute` yourself. `execute` remains useful as an explicit, scriptable
+path (e.g. for manual/local testing) that doesn't depend on that Function or on writing to
+Firestore first. New Execution Run statuses, Firestore writes from the executor, and Card status
+changes remain out of scope for this deploy tooling — see the root [`AGENTS.md`](../../AGENTS.md) /
+project ADA history for that boundary.
 
 ## What this is
 
