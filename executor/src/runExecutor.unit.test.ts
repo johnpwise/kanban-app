@@ -8,6 +8,7 @@ import { createFakeInspectWorkingTree } from "./testHelpers/fakeInspectWorkingTr
 import { createFakeLogger } from "./testHelpers/fakeLogger";
 import { createFakeMaterializeRepositoryWorkspace } from "./testHelpers/fakeMaterializeRepositoryWorkspace";
 import { createFakeInvokeCodingAgent } from "./testHelpers/fakeInvokeCodingAgent";
+import { createFakeVerifyGitIntegrity } from "./testHelpers/fakeVerifyGitIntegrity";
 
 const PROMPT = "Do not leak this prompt text into any log line.";
 const TITLE = "Do not leak this title text into any log line.";
@@ -45,6 +46,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -53,6 +55,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -65,6 +68,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     await runExecutor({
@@ -73,6 +77,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
       claimIdFactory: () => "claim-1",
     });
 
@@ -89,6 +94,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace, calls } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -97,6 +103,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -113,9 +120,10 @@ describe("runExecutor", () => {
     const { logger, calls } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     const infoCall = calls.find((call) => call.level === "info");
@@ -135,9 +143,10 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(claimCalls).toEqual([]);
@@ -152,6 +161,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace, calls } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -160,6 +170,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -173,9 +184,10 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(calls).toEqual([{ executionRunId: "req-1" }]);
@@ -187,9 +199,10 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    const outcome = await runExecutor({ env: {}, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    const outcome = await runExecutor({ env: {}, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(outcome.ok).toBe(false);
@@ -201,6 +214,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -209,6 +223,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -221,6 +236,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -229,6 +245,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -242,6 +259,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -250,6 +268,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -262,6 +281,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -270,6 +290,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -284,9 +305,10 @@ describe("runExecutor", () => {
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     const successCall = calls.find((call) => call.level === "info");
@@ -305,9 +327,10 @@ describe("runExecutor", () => {
     const { logger, calls } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
@@ -321,9 +344,10 @@ describe("runExecutor", () => {
     const { logger, calls } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
@@ -336,9 +360,10 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace, calls } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(calls).toEqual([{ repository: "johnpwise/kanban-app", baseBranch: "develop" }]);
@@ -350,9 +375,10 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(cleanupCallCount()).toBe(1);
@@ -364,6 +390,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "clone_failed" });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -372,6 +399,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -386,6 +414,7 @@ describe("runExecutor", () => {
       throwError: new Error("unexpected"),
     });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -394,6 +423,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -406,9 +436,10 @@ describe("runExecutor", () => {
     const { logger, calls } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "checkout_failed" });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
@@ -424,9 +455,10 @@ describe("runExecutor", () => {
       gitErrorCode: 128,
     });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     const errorCall = calls.find(
@@ -443,6 +475,7 @@ describe("runExecutor", () => {
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -451,6 +484,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -466,9 +500,10 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "clone_failed" });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(recordSourceRevisionCalls).toEqual([]);
@@ -483,9 +518,10 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(recordSourceRevisionCalls).toEqual([]);
@@ -500,9 +536,10 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(cleanupCallCount()).toBe(1);
@@ -517,6 +554,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -525,6 +563,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -542,9 +581,10 @@ describe("runExecutor", () => {
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     const errorCall = calls.find(
@@ -565,6 +605,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -573,6 +614,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -588,6 +630,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -596,6 +639,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -613,9 +657,10 @@ describe("runExecutor", () => {
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     const errorCall = calls.find(
@@ -638,9 +683,10 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(cleanupCallCount()).toBe(1);
@@ -654,6 +700,7 @@ describe("runExecutor", () => {
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
     let cleanupCallCountAtInvocation = -1;
     const { invokeCodingAgent, calls } = createFakeInvokeCodingAgent({
       onCall: () => {
@@ -668,6 +715,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
       invokeCodingAgent,
     });
 
@@ -688,6 +736,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
     const { invokeCodingAgent } = createFakeInvokeCodingAgent();
 
     // Act
@@ -697,6 +746,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
       invokeCodingAgent,
     });
 
@@ -710,6 +760,7 @@ describe("runExecutor", () => {
     const { logger, calls: logCalls } = createFakeLogger();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
     const { invokeCodingAgent } = createFakeInvokeCodingAgent({
       throwError: new Error("unsafe coding-agent failure detail"),
     });
@@ -721,6 +772,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
       invokeCodingAgent,
     });
 
@@ -736,6 +788,7 @@ describe("runExecutor", () => {
     const { logger, calls: logCalls } = createFakeLogger();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
     const { invokeCodingAgent } = createFakeInvokeCodingAgent({
       throwError: new ProcessCodingAgentRuntimeError("non_zero_exit", "Coding-agent process exited with code 1."),
     });
@@ -747,6 +800,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
       invokeCodingAgent,
     });
 
@@ -764,6 +818,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "clone_failed" });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
     const { invokeCodingAgent, calls } = createFakeInvokeCodingAgent();
 
     // Act
@@ -773,6 +828,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
       invokeCodingAgent,
     });
 
@@ -789,6 +845,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
     const { invokeCodingAgent, calls } = createFakeInvokeCodingAgent();
 
     // Act
@@ -798,6 +855,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
       invokeCodingAgent,
     });
 
@@ -814,13 +872,279 @@ describe("runExecutor", () => {
     const { logger, calls } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity });
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
     expect(serializedLogs(calls)).not.toContain(TITLE);
+  });
+
+  it("verifies git source-control integrity at the still-live workspace path, with the persisted headSha and the immutable baseBranch, after the coding agent invocation succeeds, before cleanup", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace({
+      headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    });
+    const { invokeCodingAgent } = createFakeInvokeCodingAgent();
+    const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    let cleanupCallCountAtVerification = -1;
+    const { verifyGitIntegrity, calls } = createFakeVerifyGitIntegrity({
+      onCall: () => {
+        cleanupCallCountAtVerification = cleanupCallCount();
+      },
+    });
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      invokeCodingAgent,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+    });
+
+    // Assert
+    expect(calls).toEqual([
+      {
+        workspacePath: "/tmp/fake-workspace",
+        expectedHeadSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        expectedBranch: "develop",
+      },
+    ]);
+    expect(cleanupCallCountAtVerification).toBe(0);
+  });
+
+  it("does not verify git integrity when the coding agent invocation fails", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+    const { invokeCodingAgent } = createFakeInvokeCodingAgent({ throwError: new Error("unsafe detail") });
+    const { inspectWorkingTree } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity, calls } = createFakeVerifyGitIntegrity();
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      invokeCodingAgent,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+    });
+
+    // Assert
+    expect(calls).toEqual([]);
+  });
+
+  it("cleans up the workspace exactly once, does not inspect the working tree, and returns a safe failure outcome, when HEAD has changed", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls: logCalls } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace({
+      headSha: "a".repeat(40),
+    });
+    const { inspectWorkingTree, calls: workingTreeCalls } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity({
+      reason: "head_changed",
+      expectedHeadSha: "a".repeat(40),
+      actualHeadSha: "b".repeat(40),
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "git_integrity_head_changed" });
+    expect(cleanupCallCount()).toBe(1);
+    expect(workingTreeCalls).toEqual([]);
+    const errorCall = logCalls.find((call) => call.level === "error" && call.message.includes("HEAD"));
+    expect(errorCall?.fields).toMatchObject({ expectedHeadSha: "a".repeat(40), actualHeadSha: "b".repeat(40) });
+  });
+
+  it("cleans up the workspace exactly once, does not inspect the working tree, and returns a safe failure outcome, when the checked-out branch has changed", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls: logCalls } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree, calls: workingTreeCalls } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity({
+      reason: "branch_changed",
+      expectedBranch: "develop",
+      actualBranch: "coding-agent-branch",
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "git_integrity_branch_changed" });
+    expect(cleanupCallCount()).toBe(1);
+    expect(workingTreeCalls).toEqual([]);
+    const errorCall = logCalls.find((call) => call.level === "error" && call.message.includes("branch"));
+    expect(errorCall?.fields).toMatchObject({ expectedBranch: "develop", actualBranch: "coding-agent-branch" });
+  });
+
+  it("cleans up the workspace exactly once, does not inspect the working tree, and returns a safe failure outcome, when git integrity inspection reports a structured failure", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls: logCalls } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree, calls: workingTreeCalls } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity({
+      reason: "inspection_failed",
+      stage: "resolve_head",
+      gitErrorCode: 128,
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "git_integrity_inspection_failed" });
+    expect(cleanupCallCount()).toBe(1);
+    expect(workingTreeCalls).toEqual([]);
+    const errorCall = logCalls.find((call) => call.level === "error" && call.message.includes("integrity"));
+    expect(errorCall?.fields).toMatchObject({ gitErrorCode: 128 });
+  });
+
+  it("cleans up the workspace exactly once, does not inspect the working tree, and returns a safe failure outcome, when git integrity verification throws unexpectedly", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls: logCalls } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree, calls: workingTreeCalls } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity({
+      throwError: new Error("unsafe git integrity failure detail"),
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "git_integrity_inspection_failed" });
+    expect(cleanupCallCount()).toBe(1);
+    expect(workingTreeCalls).toEqual([]);
+    expect(serializedLogs(logCalls)).not.toContain("unsafe git integrity failure detail");
+  });
+
+  it("proves the ordering: coding-agent failure -> NO git integrity verification -> NO working-tree inspection -> cleanup", async () => {
+    // Arrange
+    const events: string[] = [];
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+    const wrappedMaterialize: typeof materializeRepositoryWorkspace = async (request) => {
+      const outcome = await materializeRepositoryWorkspace(request);
+      if (outcome.ok) {
+        const cleanup = outcome.cleanup;
+        return {
+          ...outcome,
+          cleanup: async () => {
+            events.push("cleanup");
+            await cleanup();
+          },
+        };
+      }
+      return outcome;
+    };
+    const { invokeCodingAgent } = createFakeInvokeCodingAgent({
+      throwError: new Error("unsafe detail"),
+      onCall: () => events.push("coding_agent"),
+    });
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ onCall: () => events.push("inspect_working_tree") });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity({ onCall: () => events.push("git_integrity") });
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace: wrappedMaterialize,
+      invokeCodingAgent,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+    });
+
+    // Assert
+    expect(events).toEqual(["coding_agent", "cleanup"]);
+  });
+
+  it("proves the ordering: git integrity verification failure -> NO working-tree inspection -> cleanup", async () => {
+    // Arrange
+    const events: string[] = [];
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+    const wrappedMaterialize: typeof materializeRepositoryWorkspace = async (request) => {
+      const outcome = await materializeRepositoryWorkspace(request);
+      if (outcome.ok) {
+        const cleanup = outcome.cleanup;
+        return {
+          ...outcome,
+          cleanup: async () => {
+            events.push("cleanup");
+            await cleanup();
+          },
+        };
+      }
+      return outcome;
+    };
+    const { invokeCodingAgent } = createFakeInvokeCodingAgent({ onCall: () => events.push("coding_agent") });
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ onCall: () => events.push("inspect_working_tree") });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity({
+      reason: "head_changed",
+      onCall: () => events.push("git_integrity"),
+    });
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace: wrappedMaterialize,
+      invokeCodingAgent,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+    });
+
+    // Assert
+    expect(events).toEqual(["coding_agent", "git_integrity", "cleanup"]);
   });
 
   it("inspects the working tree at the still-live workspace path after the coding agent invocation succeeds, before cleanup", async () => {
@@ -835,6 +1159,7 @@ describe("runExecutor", () => {
         cleanupCallCountAtInspection = cleanupCallCount();
       },
     });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     await runExecutor({
@@ -844,6 +1169,7 @@ describe("runExecutor", () => {
       materializeRepositoryWorkspace,
       invokeCodingAgent,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -851,7 +1177,7 @@ describe("runExecutor", () => {
     expect(cleanupCallCountAtInspection).toBe(0);
   });
 
-  it("proves the ordering: sourceRevision persisted -> coding agent invoked -> working tree inspected -> workspace cleanup", async () => {
+  it("proves the ordering: sourceRevision persisted -> coding agent invoked -> git integrity verified -> working tree inspected -> workspace cleanup", async () => {
     // Arrange
     const events: string[] = [];
     const { repository, recordSourceRevisionCalls } = createFakeExecutionRunRepository({ data: validRunData() });
@@ -873,6 +1199,7 @@ describe("runExecutor", () => {
     };
     const { invokeCodingAgent } = createFakeInvokeCodingAgent({ onCall: () => events.push("coding_agent") });
     const { inspectWorkingTree } = createFakeInspectWorkingTree({ onCall: () => events.push("inspect_working_tree") });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity({ onCall: () => events.push("git_integrity") });
 
     // Act
     await runExecutor({
@@ -882,11 +1209,12 @@ describe("runExecutor", () => {
       materializeRepositoryWorkspace: wrappedMaterialize,
       invokeCodingAgent,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
     expect(recordSourceRevisionCalls).toEqual([{ executionRunId: "req-1", headSha: "a".repeat(40) }]);
-    expect(events).toEqual(["coding_agent", "inspect_working_tree", "cleanup"]);
+    expect(events).toEqual(["coding_agent", "git_integrity", "inspect_working_tree", "cleanup"]);
   });
 
   it("does not inspect the working tree when the coding agent invocation fails", async () => {
@@ -896,6 +1224,7 @@ describe("runExecutor", () => {
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { invokeCodingAgent } = createFakeInvokeCodingAgent({ throwError: new Error("unsafe detail") });
     const { inspectWorkingTree, calls } = createFakeInspectWorkingTree();
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     await runExecutor({
@@ -905,6 +1234,7 @@ describe("runExecutor", () => {
       materializeRepositoryWorkspace,
       invokeCodingAgent,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -917,6 +1247,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "clean" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -925,6 +1256,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -937,6 +1269,7 @@ describe("runExecutor", () => {
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -945,6 +1278,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -957,6 +1291,7 @@ describe("runExecutor", () => {
     const { logger, calls: logCalls } = createFakeLogger();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree({ reason: "status_failed", gitErrorCode: 128 });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -965,6 +1300,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert
@@ -982,6 +1318,7 @@ describe("runExecutor", () => {
     const { inspectWorkingTree } = createFakeInspectWorkingTree({
       throwError: new Error("unsafe inspection failure detail"),
     });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
     const outcome = await runExecutor({
@@ -990,6 +1327,7 @@ describe("runExecutor", () => {
       logger,
       materializeRepositoryWorkspace,
       inspectWorkingTree,
+      verifyGitIntegrity,
     });
 
     // Assert

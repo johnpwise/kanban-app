@@ -9,12 +9,14 @@ import { Timestamp, getFirestore } from "firebase-admin/firestore";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createFirestoreExecutionRunRepository } from "./executionRunRepository";
+import { verifyGitIntegrity } from "./gitIntegrityVerification";
 import { runGit } from "./gitProcess";
 import { materializeRepositoryWorkspace } from "./repositoryWorkspace";
 import { runExecutor } from "./runExecutor";
 import { inspectWorkingTree } from "./workingTreeInspection";
 
 import type { ExecutorLogger } from "./runExecutor";
+import type { VerifyGitIntegrity } from "./gitIntegrityVerification";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
 import type { InspectWorkingTree } from "./workingTreeInspection";
 
@@ -54,6 +56,9 @@ function localMaterializeRepositoryWorkspace(fixturePath: string): MaterializeRe
 
 /** Binds the real `inspectWorkingTree` to the real `runGit`, exercising the actual `git status` invocation. */
 const localInspectWorkingTree: InspectWorkingTree = (request) => inspectWorkingTree({ ...request, runGit });
+
+/** Binds the real `verifyGitIntegrity` to the real `runGit`, exercising the actual `git rev-parse` invocations. */
+const localVerifyGitIntegrity: VerifyGitIntegrity = (request) => verifyGitIntegrity({ ...request, runGit });
 
 function acceptedRunData(overrides: { executionRequestId: string; projectId: string; cardId: string }) {
   return {
@@ -106,6 +111,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       logger: silentLogger,
       materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
       inspectWorkingTree: localInspectWorkingTree,
+      verifyGitIntegrity: localVerifyGitIntegrity,
     });
 
     // Assert
@@ -157,6 +163,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       logger: silentLogger,
       materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
       inspectWorkingTree: localInspectWorkingTree,
+      verifyGitIntegrity: localVerifyGitIntegrity,
       claimIdFactory: () => "claim-1",
     });
 
@@ -184,6 +191,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
         logger: silentLogger,
         materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
         inspectWorkingTree: localInspectWorkingTree,
+        verifyGitIntegrity: localVerifyGitIntegrity,
         claimIdFactory: () => "attempt-A",
       }),
       runExecutor({
@@ -192,6 +200,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
         logger: silentLogger,
         materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
         inspectWorkingTree: localInspectWorkingTree,
+        verifyGitIntegrity: localVerifyGitIntegrity,
         claimIdFactory: () => "attempt-B",
       }),
     ]);
@@ -265,6 +274,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       logger: silentLogger,
       materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
       inspectWorkingTree: localInspectWorkingTree,
+      verifyGitIntegrity: localVerifyGitIntegrity,
     });
 
     // Assert
@@ -292,6 +302,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       logger: silentLogger,
       materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
       inspectWorkingTree: localInspectWorkingTree,
+      verifyGitIntegrity: localVerifyGitIntegrity,
       invokeCodingAgent: async ({ executionRequestId: invokedExecutionRequestId, workspace }) => {
         observedInvocation = { executionRequestId: invokedExecutionRequestId, path: workspace.path };
         await stat(workspace.path);
@@ -321,6 +332,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       logger: silentLogger,
       materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
       inspectWorkingTree: localInspectWorkingTree,
+      verifyGitIntegrity: localVerifyGitIntegrity,
       invokeCodingAgent: async ({ workspace }) => {
         await writeFile(join(workspace.path, "generated-by-agent.txt"), "content\n");
       },
@@ -328,5 +340,89 @@ describeWithEmulator("executor against the Firestore emulator", () => {
 
     // Assert
     expect(outcome).toEqual({ ok: true, claimed: true, workingTree: "changes_detected" });
+  });
+
+  it("reports verified integrity and workingTree:'changes_detected' end-to-end when the coding agent only edits working-tree files", async () => {
+    // Arrange
+    const executionRequestId = `req-${randomUUID()}`;
+    const runData = acceptedRunData({ executionRequestId, projectId: "project-1", cardId: "card-1" });
+    await firestore.collection("executionRuns").doc(executionRequestId).set(runData);
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: executionRequestId },
+      repository: createFirestoreExecutionRunRepository(),
+      logger: silentLogger,
+      materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
+      inspectWorkingTree: localInspectWorkingTree,
+      verifyGitIntegrity: localVerifyGitIntegrity,
+      invokeCodingAgent: async ({ workspace }) => {
+        await writeFile(join(workspace.path, "README.md"), "modified by the coding agent\n");
+        await writeFile(join(workspace.path, "generated-by-agent.txt"), "content\n");
+      },
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: true, claimed: true, workingTree: "changes_detected" });
+  });
+
+  it("fails safely end-to-end, without ever running working-tree inspection, when the coding agent creates a local commit and moves HEAD", async () => {
+    // Arrange
+    const executionRequestId = `req-${randomUUID()}`;
+    const runData = acceptedRunData({ executionRequestId, projectId: "project-1", cardId: "card-1" });
+    await firestore.collection("executionRuns").doc(executionRequestId).set(runData);
+    let workingTreeInspected = false;
+    const spyingInspectWorkingTree: InspectWorkingTree = async (request) => {
+      workingTreeInspected = true;
+      return localInspectWorkingTree(request);
+    };
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: executionRequestId },
+      repository: createFirestoreExecutionRunRepository(),
+      logger: silentLogger,
+      materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
+      inspectWorkingTree: spyingInspectWorkingTree,
+      verifyGitIntegrity: localVerifyGitIntegrity,
+      invokeCodingAgent: async ({ workspace }) => {
+        await writeFile(join(workspace.path, "agent-change.txt"), "unsanctioned commit\n");
+        execFileSync("git", ["add", "agent-change.txt"], { cwd: workspace.path });
+        execFileSync("git", ["commit", "-m", "unsanctioned coding-agent commit"], { cwd: workspace.path });
+      },
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "git_integrity_head_changed" });
+    expect(workingTreeInspected).toBe(false);
+  });
+
+  it("fails safely end-to-end, without ever running working-tree inspection, when the coding agent switches to another branch", async () => {
+    // Arrange
+    const executionRequestId = `req-${randomUUID()}`;
+    const runData = acceptedRunData({ executionRequestId, projectId: "project-1", cardId: "card-1" });
+    await firestore.collection("executionRuns").doc(executionRequestId).set(runData);
+    let workingTreeInspected = false;
+    const spyingInspectWorkingTree: InspectWorkingTree = async (request) => {
+      workingTreeInspected = true;
+      return localInspectWorkingTree(request);
+    };
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: executionRequestId },
+      repository: createFirestoreExecutionRunRepository(),
+      logger: silentLogger,
+      materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
+      inspectWorkingTree: spyingInspectWorkingTree,
+      verifyGitIntegrity: localVerifyGitIntegrity,
+      invokeCodingAgent: async ({ workspace }) => {
+        execFileSync("git", ["checkout", "-b", "coding-agent-branch"], { cwd: workspace.path });
+      },
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "git_integrity_branch_changed" });
+    expect(workingTreeInspected).toBe(false);
   });
 });
