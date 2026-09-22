@@ -1,6 +1,7 @@
 import { parseCodexProviderConfig } from "./codexProviderConfig";
 import { createFirestoreExecutionRunRepository } from "./executionRunRepository";
 import { exitCodeForOutcome } from "./exitCode";
+import { verifyGitIntegrity } from "./gitIntegrityVerification";
 import { runGit } from "./gitProcess";
 import { createProcessInvokeCodingAgent } from "./processCodingAgentRuntime";
 import { materializeRepositoryWorkspace } from "./repositoryWorkspace";
@@ -44,6 +45,7 @@ async function main(): Promise<void> {
     logger: jsonLogger,
     materializeRepositoryWorkspace: (request) => materializeRepositoryWorkspace({ ...request, runGit }),
     invokeCodingAgent,
+    verifyGitIntegrity: (request) => verifyGitIntegrity({ ...request, runGit }),
     inspectWorkingTree: (request) => inspectWorkingTree({ ...request, runGit }),
   });
   process.exit(exitCodeForOutcome(outcome));

@@ -7,6 +7,7 @@ import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
 import type { InvokeCodingAgent } from "./codingAgentInvocation";
 import type { ExecutionRunRepository } from "./executionRunRepository";
+import type { VerifyGitIntegrity } from "./gitIntegrityVerification";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
 import type { InspectWorkingTree, WorkingTreeStatus } from "./workingTreeInspection";
 
@@ -33,8 +34,16 @@ export interface RunExecutorParams {
    */
   invokeCodingAgent?: InvokeCodingAgent;
   /**
-   * Inspects the still-live workspace's Git working tree after a successful coding-agent
-   * invocation and before cleanup. Required, like `materializeRepositoryWorkspace`: there is no
+   * Verifies, against the still-live workspace, that a successful coding-agent invocation left
+   * `HEAD` and the checked-out branch exactly as materialised — before working-tree inspection
+   * runs. Required, like `materializeRepositoryWorkspace`: there is no safe default, since
+   * silently reporting "verified" without checking would misrepresent the outcome. ADA retains
+   * ownership of Git history and delivery; this is the boundary that enforces it.
+   */
+  verifyGitIntegrity: VerifyGitIntegrity;
+  /**
+   * Inspects the still-live workspace's Git working tree after git source-control integrity is
+   * verified and before cleanup. Required, like `materializeRepositoryWorkspace`: there is no
    * safe default, since silently reporting "clean" without checking would misrepresent the
    * outcome.
    */
@@ -55,6 +64,7 @@ export async function runExecutor({
   logger,
   materializeRepositoryWorkspace,
   invokeCodingAgent = noopInvokeCodingAgent,
+  verifyGitIntegrity,
   inspectWorkingTree,
   claimIdFactory = randomUUID,
 }: RunExecutorParams): Promise<ExecutorOutcome> {
@@ -161,6 +171,43 @@ export async function runExecutor({
         error instanceof ProcessCodingAgentRuntimeError ? { kind: error.kind, reason: error.message } : {};
       logger.error("Unexpected failure invoking the coding agent.", { ...safeIdentifiers, ...safeErrorFields });
       return { ok: false, reason: "coding_agent_invocation_error" };
+    }
+
+    let gitIntegrityOutcome;
+    try {
+      gitIntegrityOutcome = await verifyGitIntegrity({
+        workspacePath: workspaceOutcome.workspace.path,
+        expectedHeadSha: headSha,
+        expectedBranch: run.input.baseBranch,
+      });
+    } catch {
+      logger.error("Unexpected failure verifying Git source-control integrity.", safeIdentifiers);
+      return { ok: false, reason: "git_integrity_inspection_failed" };
+    }
+
+    if (!gitIntegrityOutcome.ok) {
+      if (gitIntegrityOutcome.reason === "head_changed") {
+        logger.error("Coding-agent invocation left HEAD changed from the persisted source revision.", {
+          ...safeIdentifiers,
+          expectedHeadSha: gitIntegrityOutcome.expectedHeadSha,
+          actualHeadSha: gitIntegrityOutcome.actualHeadSha,
+        });
+        return { ok: false, reason: "git_integrity_head_changed" };
+      }
+      if (gitIntegrityOutcome.reason === "branch_changed") {
+        logger.error("Coding-agent invocation left the checked-out branch changed from the requested baseBranch.", {
+          ...safeIdentifiers,
+          expectedBranch: gitIntegrityOutcome.expectedBranch,
+          actualBranch: gitIntegrityOutcome.actualBranch,
+        });
+        return { ok: false, reason: "git_integrity_branch_changed" };
+      }
+      logger.error("Failed to verify Git source-control integrity.", {
+        ...safeIdentifiers,
+        stage: gitIntegrityOutcome.stage,
+        gitErrorCode: gitIntegrityOutcome.gitErrorCode,
+      });
+      return { ok: false, reason: "git_integrity_inspection_failed" };
     }
 
     let workingTreeOutcome;
