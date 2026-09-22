@@ -181,4 +181,54 @@ describe("parseExecutionRunDocument", () => {
     // Assert
     expect(act).toThrow();
   });
+
+  it("accepts a document that already carries a source revision record", () => {
+    // Arrange
+    const data = {
+      ...validData(),
+      sourceRevision: { headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", resolvedAt: Timestamp.now() },
+    };
+
+    // Act
+    const result = parseExecutionRunDocument("req-1", data);
+
+    // Assert
+    expect(result.sourceRevision).toMatchObject({ headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" });
+  });
+
+  it("accepts a document without a sourceRevision (not yet recorded)", () => {
+    // Arrange
+    const data = validData();
+
+    // Act
+    const act = () => parseExecutionRunDocument("req-1", data);
+
+    // Assert
+    expect(act).not.toThrow();
+  });
+
+  it("rejects a sourceRevision with an empty headSha", () => {
+    // Arrange
+    const data = { ...validData(), sourceRevision: { headSha: "", resolvedAt: Timestamp.now() } };
+
+    // Act
+    const act = () => parseExecutionRunDocument("req-1", data);
+
+    // Assert
+    expect(act).toThrow();
+  });
+
+  it("rejects a sourceRevision with a non-Timestamp resolvedAt", () => {
+    // Arrange
+    const data = {
+      ...validData(),
+      sourceRevision: { headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", resolvedAt: new Date().toISOString() },
+    };
+
+    // Act
+    const act = () => parseExecutionRunDocument("req-1", data);
+
+    // Assert
+    expect(act).toThrow();
+  });
 });

@@ -105,11 +105,31 @@ export async function runExecutor({
     return { ok: false, reason: workspaceOutcome.reason };
   }
 
-  await workspaceOutcome.cleanup();
+  const { headSha } = workspaceOutcome.workspace;
 
-  logger.info("Accepted execution run loaded and validated successfully.", {
-    ...safeIdentifiers,
-    headSha: workspaceOutcome.workspace.headSha,
-  });
-  return { ok: true, claimed: true };
+  try {
+    let recordOutcome;
+    try {
+      recordOutcome = await repository.recordSourceRevision(executionRunId, headSha);
+    } catch {
+      logger.error("Transient failure recording the resolved source revision.", { ...safeIdentifiers, headSha });
+      return { ok: false, reason: "source_revision_error" };
+    }
+
+    if (recordOutcome.outcome === "conflict") {
+      logger.error("A conflicting source revision is already persisted for this execution run.", {
+        ...safeIdentifiers,
+        headSha,
+      });
+      return { ok: false, reason: "source_revision_conflict" };
+    }
+
+    logger.info("Accepted execution run loaded and validated successfully.", {
+      ...safeIdentifiers,
+      headSha,
+    });
+    return { ok: true, claimed: true };
+  } finally {
+    await workspaceOutcome.cleanup();
+  }
 }

@@ -7,6 +7,8 @@ const EXECUTION_RUNS_COLLECTION = "executionRuns";
 
 export type ClaimExecutionRunOutcome = { claimed: true } | { claimed: false; reason: "already_claimed" };
 
+export type RecordSourceRevisionOutcome = { outcome: "created" } | { outcome: "already_recorded" } | { outcome: "conflict" };
+
 export interface ExecutionRunRepository {
   /** Returns the raw document data, or `undefined` if no such document exists. Never writes. */
   loadExecutionRunData(executionRunId: string): Promise<unknown | undefined>;
@@ -19,6 +21,19 @@ export interface ExecutionRunRepository {
    * into.
    */
   claimExecutionRun(executionRunId: string, claimId: string): Promise<ClaimExecutionRunOutcome>;
+  /**
+   * Durably records the exact checked-out Git HEAD SHA on `executionRuns/{executionRunId}`: if no
+   * `sourceRevision` is present yet, sets `{ headSha, resolvedAt }` and returns
+   * `{ outcome: "created" }`; if one is already present with the same `headSha` (this call or a
+   * concurrent one committed first), returns `{ outcome: "already_recorded" }` without writing; if
+   * one is already present with a *different* `headSha`, returns `{ outcome: "conflict" }` without
+   * writing — a conflicting revision is never silently overwritten. A missing document at write
+   * time (the run was just loaded and claimed moments earlier) is treated the same as a conflict:
+   * a safe refusal to write, mirroring how `claimExecutionRun` folds a missing document into its
+   * existing "do not write" branch rather than adding a distinct outcome. Read-check-write happens
+   * inside a single Firestore transaction, same as `claimExecutionRun`.
+   */
+  recordSourceRevision(executionRunId: string, headSha: string): Promise<RecordSourceRevisionOutcome>;
 }
 
 let firestore: Firestore | undefined;
@@ -64,6 +79,31 @@ export function createFirestoreExecutionRunRepository(): ExecutionRunRepository 
           claim: { claimId, claimedAt: FieldValue.serverTimestamp() },
         });
         return { claimed: true };
+      });
+    },
+
+    async recordSourceRevision(executionRunId: string, headSha: string) {
+      const firestore = getExecutionRunFirestore();
+      const docRef = firestore.collection(EXECUTION_RUNS_COLLECTION).doc(executionRunId);
+
+      return firestore.runTransaction<RecordSourceRevisionOutcome>(async (transaction) => {
+        const snapshot = await transaction.get(docRef);
+        const existingSourceRevision = (snapshot.data() as { sourceRevision?: { headSha?: unknown } } | undefined)
+          ?.sourceRevision;
+
+        if (!snapshot.exists) {
+          return { outcome: "conflict" };
+        }
+        if (!existingSourceRevision) {
+          transaction.update(docRef, {
+            sourceRevision: { headSha, resolvedAt: FieldValue.serverTimestamp() },
+          });
+          return { outcome: "created" };
+        }
+        if (existingSourceRevision.headSha === headSha) {
+          return { outcome: "already_recorded" };
+        }
+        return { outcome: "conflict" };
       });
     },
   };
