@@ -13,6 +13,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "playwright-report/**",
     "test-results/**",
+    // Standalone Firebase Functions project with its own eslint config/tooling (functions/eslint.config.mjs).
+    "functions/**",
+    // Standalone ADA executor project with its own eslint config/tooling (executor/eslint.config.mjs).
+    "executor/**",
   ]),
 ]);
 

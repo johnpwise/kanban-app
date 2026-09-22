@@ -12,8 +12,22 @@
 
 # testing
 /coverage
+/playwright-report/
 firestore-debug.log
 firebase-debug.log
+pubsub-debug.log
+
+# firebase functions (standalone npm project, own installed deps + build output)
+functions/node_modules
+functions/lib
+
+# ADA executor (standalone npm project, own installed deps + build output)
+executor/node_modules
+executor/lib
+
+# ADA executor deployment (local operator config + last-built-image marker, no secrets)
+executor/deploy/config.env
+executor/deploy/.last-image
 
 # next.js
 /.next/
