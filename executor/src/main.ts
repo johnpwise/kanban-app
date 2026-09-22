@@ -1,4 +1,5 @@
 import { parseCodexProviderConfig } from "./codexProviderConfig";
+import { ensureAdaDeliveryBranch } from "./deliveryBranch";
 import { createFirestoreExecutionRunRepository } from "./executionRunRepository";
 import { exitCodeForOutcome } from "./exitCode";
 import { verifyGitIntegrity } from "./gitIntegrityVerification";
@@ -47,6 +48,7 @@ async function main(): Promise<void> {
     invokeCodingAgent,
     verifyGitIntegrity: (request) => verifyGitIntegrity({ ...request, runGit }),
     inspectWorkingTree: (request) => inspectWorkingTree({ ...request, runGit }),
+    ensureAdaDeliveryBranch: (request) => ensureAdaDeliveryBranch({ ...request, runGit }),
   });
   process.exit(exitCodeForOutcome(outcome));
 }
