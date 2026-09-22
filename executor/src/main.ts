@@ -5,6 +5,7 @@ import { runGit } from "./gitProcess";
 import { createProcessInvokeCodingAgent } from "./processCodingAgentRuntime";
 import { materializeRepositoryWorkspace } from "./repositoryWorkspace";
 import { runExecutor } from "./runExecutor";
+import { inspectWorkingTree } from "./workingTreeInspection";
 
 import type { InvokeCodingAgent } from "./codingAgentInvocation";
 import type { ExecutorLogger } from "./runExecutor";
@@ -43,6 +44,7 @@ async function main(): Promise<void> {
     logger: jsonLogger,
     materializeRepositoryWorkspace: (request) => materializeRepositoryWorkspace({ ...request, runGit }),
     invokeCodingAgent,
+    inspectWorkingTree: (request) => inspectWorkingTree({ ...request, runGit }),
   });
   process.exit(exitCodeForOutcome(outcome));
 }

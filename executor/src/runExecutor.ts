@@ -8,13 +8,17 @@ import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 import type { InvokeCodingAgent } from "./codingAgentInvocation";
 import type { ExecutionRunRepository } from "./executionRunRepository";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
+import type { InspectWorkingTree, WorkingTreeStatus } from "./workingTreeInspection";
 
 export interface ExecutorLogger {
   info(message: string, fields?: Record<string, unknown>): void;
   error(message: string, fields?: Record<string, unknown>): void;
 }
 
-export type ExecutorOutcome = { ok: true; claimed: boolean } | { ok: false; reason: string };
+export type ExecutorOutcome =
+  | { ok: true; claimed: false }
+  | { ok: true; claimed: true; workingTree: WorkingTreeStatus }
+  | { ok: false; reason: string };
 
 export interface RunExecutorParams {
   env: Record<string, string | undefined>;
@@ -28,6 +32,13 @@ export interface RunExecutorParams {
    * coding-agent runtime without changing this composition.
    */
   invokeCodingAgent?: InvokeCodingAgent;
+  /**
+   * Inspects the still-live workspace's Git working tree after a successful coding-agent
+   * invocation and before cleanup. Required, like `materializeRepositoryWorkspace`: there is no
+   * safe default, since silently reporting "clean" without checking would misrepresent the
+   * outcome.
+   */
+  inspectWorkingTree: InspectWorkingTree;
   /** Generates the id persisted with a winning claim. Defaults to `randomUUID`; overridable for tests. */
   claimIdFactory?: () => string;
 }
@@ -44,6 +55,7 @@ export async function runExecutor({
   logger,
   materializeRepositoryWorkspace,
   invokeCodingAgent = noopInvokeCodingAgent,
+  inspectWorkingTree,
   claimIdFactory = randomUUID,
 }: RunExecutorParams): Promise<ExecutorOutcome> {
   let executionRunId: string;
@@ -151,11 +163,28 @@ export async function runExecutor({
       return { ok: false, reason: "coding_agent_invocation_error" };
     }
 
+    let workingTreeOutcome;
+    try {
+      workingTreeOutcome = await inspectWorkingTree({ workspacePath: workspaceOutcome.workspace.path });
+    } catch {
+      logger.error("Unexpected failure inspecting the working tree.", safeIdentifiers);
+      return { ok: false, reason: "working_tree_inspection_error" };
+    }
+
+    if (!workingTreeOutcome.ok) {
+      logger.error("Failed to inspect the working tree.", {
+        ...safeIdentifiers,
+        gitErrorCode: workingTreeOutcome.gitErrorCode,
+      });
+      return { ok: false, reason: "working_tree_inspection_error" };
+    }
+
     logger.info("Accepted execution run loaded and validated successfully.", {
       ...safeIdentifiers,
       headSha,
+      workingTree: workingTreeOutcome.status,
     });
-    return { ok: true, claimed: true };
+    return { ok: true, claimed: true, workingTree: workingTreeOutcome.status };
   } finally {
     await workspaceOutcome.cleanup();
   }
