@@ -52,6 +52,16 @@ const executionRunClaimSchema = z.object({
   claimedAt: z.instanceof(Timestamp),
 });
 
+/**
+ * The durable source-provenance record written by the winning executor after a successful
+ * repository checkout (see `executionRunRepository.ts`'s `recordSourceRevision`). Executor-only,
+ * like `claim` — not modelled on the Functions side.
+ */
+const executionRunSourceRevisionSchema = z.object({
+  headSha: z.string().min(1),
+  resolvedAt: z.instanceof(Timestamp),
+});
+
 /** Shape of an `executionRuns/{executionRequestId}` Firestore document's data. */
 const executionRunDocumentSchema = z.object({
   executionRequestId: z.string().min(1),
@@ -63,6 +73,7 @@ const executionRunDocumentSchema = z.object({
   firstMessageId: z.string().min(1).optional(),
   input: executionRunInputSchema,
   claim: executionRunClaimSchema.optional(),
+  sourceRevision: executionRunSourceRevisionSchema.optional(),
 });
 
 export type ExecutionRunInput = z.infer<typeof executionRunInputSchema>;

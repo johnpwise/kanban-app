@@ -395,4 +395,217 @@ describe("runExecutor", () => {
     );
     expect(errorCall?.fields).toMatchObject({ reason: "clone_failed", gitErrorCode: 128 });
   });
+
+  it("records the resolved source revision only after a successful repository materialisation", async () => {
+    // Arrange
+    const { repository, recordSourceRevisionCalls } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
+      headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: true, claimed: true });
+    expect(recordSourceRevisionCalls).toEqual([
+      { executionRunId: "req-1", headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" },
+    ]);
+  });
+
+  it("does not attempt to record a source revision when repository materialisation fails", async () => {
+    // Arrange
+    const { repository, recordSourceRevisionCalls } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "clone_failed" });
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace });
+
+    // Assert
+    expect(recordSourceRevisionCalls).toEqual([]);
+  });
+
+  it("does not attempt to record a source revision when the execution run is already claimed by another executor", async () => {
+    // Arrange
+    const { repository, recordSourceRevisionCalls } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      claim: { claimed: false, reason: "already_claimed" },
+    });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace });
+
+    // Assert
+    expect(recordSourceRevisionCalls).toEqual([]);
+  });
+
+  it("cleans up the workspace exactly once even when recording the source revision fails", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      recordSourceRevisionThrowError: new Error("unavailable"),
+    });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace });
+
+    // Assert
+    expect(cleanupCallCount()).toBe(1);
+  });
+
+  it("returns failure, not false success, when recording the source revision throws a transient error", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      recordSourceRevisionThrowError: new Error("unavailable"),
+    });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "source_revision_error" });
+  });
+
+  it("logs the safe identifiers and resolved head SHA when recording the source revision throws a transient error", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      recordSourceRevisionThrowError: new Error("unavailable"),
+    });
+    const { logger, calls } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
+      headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    });
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace });
+
+    // Assert
+    const errorCall = calls.find(
+      (call) => call.level === "error" && call.message === "Transient failure recording the resolved source revision.",
+    );
+    expect(errorCall?.fields).toMatchObject({
+      executionRequestId: "req-1",
+      headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    });
+  });
+
+  it("returns success when the source revision was already recorded identically (idempotent)", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      recordSourceRevision: { outcome: "already_recorded" },
+    });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: true, claimed: true });
+  });
+
+  it("returns failure, not false success, when a conflicting source revision is already persisted", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      recordSourceRevision: { outcome: "conflict" },
+    });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "source_revision_conflict" });
+  });
+
+  it("logs the safe identifiers and resolved head SHA when a conflicting source revision is already persisted", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      recordSourceRevision: { outcome: "conflict" },
+    });
+    const { logger, calls } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
+      headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    });
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace });
+
+    // Assert
+    const errorCall = calls.find(
+      (call) =>
+        call.level === "error" &&
+        call.message === "A conflicting source revision is already persisted for this execution run.",
+    );
+    expect(errorCall?.fields).toMatchObject({
+      executionRequestId: "req-1",
+      headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    });
+  });
+
+  it("cleans up the workspace exactly once even when a conflicting source revision is already persisted", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      recordSourceRevision: { outcome: "conflict" },
+    });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace });
+
+    // Assert
+    expect(cleanupCallCount()).toBe(1);
+  });
+
+  it("never logs the prompt when recording the source revision fails", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({
+      data: validRunData(),
+      recordSourceRevisionThrowError: new Error("unavailable"),
+    });
+    const { logger, calls } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+
+    // Act
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace });
+
+    // Assert
+    expect(serializedLogs(calls)).not.toContain(PROMPT);
+  });
 });

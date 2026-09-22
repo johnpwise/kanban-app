@@ -77,3 +77,93 @@ describeWithEmulator("createFirestoreExecutionRunRepository().claimExecutionRun 
     expect(data?.claim?.claimId).toBe(claimIds[winningIndex]);
   });
 });
+
+describeWithEmulator(
+  "createFirestoreExecutionRunRepository().recordSourceRevision against the Firestore emulator",
+  () => {
+    const projectId = process.env.GCLOUD_PROJECT ?? "demo-kanban-app-test";
+    const app = initializeApp({ projectId }, `executor-source-revision-repository-integration-${randomUUID()}`);
+    const firestore = getFirestore(app);
+    const headSha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+
+    beforeAll(() => {
+      expect(firestoreEmulatorHost).toMatch(/^127\.0\.0\.1:\d+$/);
+    });
+
+    afterAll(async () => {
+      await deleteApp(app);
+    });
+
+    it("records the head SHA on a run with no existing source revision", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+
+      // Act
+      const outcome = await repository.recordSourceRevision(executionRunId, headSha);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.sourceRevision?.headSha).toBe(headSha);
+      expect(data?.sourceRevision?.resolvedAt).toBeInstanceOf(Timestamp);
+    });
+
+    it("idempotently accepts recording the same head SHA that is already persisted", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordSourceRevision(executionRunId, headSha);
+      const firstResolvedAt = (await docRef.get()).data()?.sourceRevision?.resolvedAt;
+
+      // Act
+      const outcome = await repository.recordSourceRevision(executionRunId, headSha);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "already_recorded" });
+      const data = (await docRef.get()).data();
+      expect(data?.sourceRevision?.resolvedAt).toEqual(firstResolvedAt);
+    });
+
+    it("refuses to overwrite a conflicting already-persisted head SHA", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordSourceRevision(executionRunId, headSha);
+
+      // Act
+      const outcome = await repository.recordSourceRevision(executionRunId, "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff");
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.sourceRevision?.headSha).toBe(headSha);
+    });
+
+    it("given many concurrent recordings of the same head SHA, all succeed and only one write is persisted", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      const attemptCount = 5;
+
+      // Act
+      const outcomes = await Promise.all(
+        Array.from({ length: attemptCount }, () => repository.recordSourceRevision(executionRunId, headSha)),
+      );
+
+      // Assert
+      expect(outcomes.filter((outcome) => outcome.outcome === "created")).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome.outcome === "already_recorded")).toHaveLength(attemptCount - 1);
+      const data = (await docRef.get()).data();
+      expect(data?.sourceRevision?.headSha).toBe(headSha);
+    });
+  },
+);
