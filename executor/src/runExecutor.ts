@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 
+import { noopInvokeCodingAgent } from "./codingAgentInvocation";
 import { parseExecutorConfig } from "./config";
-import { noopDownstreamWork } from "./downstreamWork";
 import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
+import type { InvokeCodingAgent } from "./codingAgentInvocation";
 import type { ExecutionRunRepository } from "./executionRunRepository";
-import type { RunDownstreamWork } from "./downstreamWork";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
 
 export interface ExecutorLogger {
@@ -22,11 +22,11 @@ export interface RunExecutorParams {
   /** Materialises the immutable input's repository/baseBranch. Only ever called after a winning claim. */
   materializeRepositoryWorkspace: MaterializeRepositoryWorkspace;
   /**
-   * Runs against the still-live workspace, after `sourceRevision` is durably persisted and before
-   * cleanup. Defaults to a no-op; overridable so a future ADA capability can plug in real
-   * workspace-scoped work without changing this composition.
+   * Invoked against the still-live workspace, after `sourceRevision` is durably persisted and
+   * before cleanup. Defaults to a no-op; overridable so a future ADA capability can plug in a real
+   * coding-agent runtime without changing this composition.
    */
-  runDownstreamWork?: RunDownstreamWork;
+  invokeCodingAgent?: InvokeCodingAgent;
   /** Generates the id persisted with a winning claim. Defaults to `randomUUID`; overridable for tests. */
   claimIdFactory?: () => string;
 }
@@ -42,7 +42,7 @@ export async function runExecutor({
   repository,
   logger,
   materializeRepositoryWorkspace,
-  runDownstreamWork = noopDownstreamWork,
+  invokeCodingAgent = noopInvokeCodingAgent,
   claimIdFactory = randomUUID,
 }: RunExecutorParams): Promise<ExecutorOutcome> {
   let executionRunId: string;
@@ -134,10 +134,14 @@ export async function runExecutor({
     }
 
     try {
-      await runDownstreamWork({ workspacePath: workspaceOutcome.workspace.path, headSha });
+      await invokeCodingAgent({
+        executionRequestId: run.executionRequestId,
+        task: { title: run.input.title, prompt: run.input.prompt },
+        workspace: { path: workspaceOutcome.workspace.path, headSha },
+      });
     } catch {
-      logger.error("Unexpected failure during downstream workspace-scoped work.", safeIdentifiers);
-      return { ok: false, reason: "downstream_work_error" };
+      logger.error("Unexpected failure invoking the coding agent.", safeIdentifiers);
+      return { ok: false, reason: "coding_agent_invocation_error" };
     }
 
     logger.info("Accepted execution run loaded and validated successfully.", {

@@ -1,4 +1,4 @@
-import { noopDownstreamWork } from "./downstreamWork";
+import { noopInvokeCodingAgent } from "./codingAgentInvocation";
 import { createFirestoreExecutionRunRepository } from "./executionRunRepository";
 import { exitCodeForOutcome } from "./exitCode";
 import { runGit } from "./gitProcess";
@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     logger: jsonLogger,
     materializeRepositoryWorkspace: (request) => materializeRepositoryWorkspace({ ...request, runGit }),
     // The extension point the next ADA capability replaces with a real coding-agent invocation.
-    runDownstreamWork: noopDownstreamWork,
+    invokeCodingAgent: noopInvokeCodingAgent,
   });
   process.exit(exitCodeForOutcome(outcome));
 }
