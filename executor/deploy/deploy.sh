@@ -52,6 +52,7 @@ fi
 : "${ADA_IMAGE_NAME:?Set ADA_IMAGE_NAME (see config.env.example)}"
 : "${ADA_JOB_NAME:?Set ADA_JOB_NAME (see config.env.example)}"
 : "${ADA_RUNTIME_SERVICE_ACCOUNT:?Set ADA_RUNTIME_SERVICE_ACCOUNT (see config.env.example)}"
+: "${ADA_CODEX_API_KEY_SECRET:?Set ADA_CODEX_API_KEY_SECRET (see config.env.example)}"
 
 PROJECT_ID="$ADA_GCP_PROJECT_ID"
 REGION="$ADA_GCP_REGION"
@@ -59,6 +60,7 @@ ARTIFACT_REPO="$ADA_ARTIFACT_REPO"
 IMAGE_NAME="$ADA_IMAGE_NAME"
 JOB_NAME="$ADA_JOB_NAME"
 RUNTIME_SA="$ADA_RUNTIME_SERVICE_ACCOUNT"
+CODEX_SECRET_NAME="$ADA_CODEX_API_KEY_SECRET"
 LAST_IMAGE_FILE="$SCRIPT_DIR/.last-image"
 
 require_cmd() {
@@ -90,6 +92,7 @@ cmd_setup() {
     artifactregistry.googleapis.com \
     iam.googleapis.com \
     cloudbuild.googleapis.com \
+    secretmanager.googleapis.com \
     --project="$PROJECT_ID"
 
   echo "==> Ensuring Artifact Registry repo '$ARTIFACT_REPO' exists in $REGION"
@@ -138,6 +141,25 @@ cmd_setup() {
     --condition=None \
     >/dev/null
 
+  echo "==> Ensuring Secret Manager secret '$CODEX_SECRET_NAME' exists (empty — this script never"
+  echo "    reads, writes, or holds the real Codex API key value; see 'Codex CLI authentication'"
+  echo "    in deploy/README.md for the one manual step that adds the actual secret version)"
+  if gcloud secrets describe "$CODEX_SECRET_NAME" --project="$PROJECT_ID" >/dev/null 2>&1; then
+    echo "    already exists, skipping create"
+  else
+    gcloud secrets create "$CODEX_SECRET_NAME" \
+      --project="$PROJECT_ID" \
+      --replication-policy="automatic"
+  fi
+
+  echo "==> Ensuring '$RUNTIME_SA' can access '$CODEX_SECRET_NAME' only (roles/secretmanager.secretAccessor,"
+  echo "    scoped to this one secret, not project-wide)"
+  gcloud secrets add-iam-policy-binding "$CODEX_SECRET_NAME" \
+    --project="$PROJECT_ID" \
+    --member="serviceAccount:$RUNTIME_SA" \
+    --role="roles/secretmanager.secretAccessor" \
+    >/dev/null
+
   echo "==> Setup complete."
 }
 
@@ -174,13 +196,17 @@ cmd_deploy_job() {
 
   echo "==> Deploying (create-or-update) Cloud Run Job '$JOB_NAME' in $REGION with image $image"
   echo "    ADA_EXECUTION_RUN_ID is intentionally NOT set here — it is supplied per execution."
+  echo "    CODEX_API_KEY is populated from Secret Manager at container start (--set-secrets), so"
+  echo "    the real key value never appears in this script, in config.env, in the Job's own"
+  echo "    plain env-var config, or in Cloud Logging."
   gcloud run jobs deploy "$JOB_NAME" \
     --image="$image" \
     --region="$REGION" \
     --project="$PROJECT_ID" \
     --tasks=1 \
     --max-retries=0 \
-    --service-account="$RUNTIME_SA"
+    --service-account="$RUNTIME_SA" \
+    --set-secrets="CODEX_API_KEY=${CODEX_SECRET_NAME}:latest"
 
   echo "==> Job deployed."
 }

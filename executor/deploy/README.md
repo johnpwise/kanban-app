@@ -19,7 +19,8 @@ statuses, Firestore writes from the executor, or Card status changes. See the ro
     `latest`).
   - `deploy-job` — create or update the Cloud Run Job definition to point at the most recently
     built image. **Does not set `ADA_EXECUTION_RUN_ID`** — the Job's persistent definition never
-    carries an execution-specific value.
+    carries an execution-specific value. Wires `CODEX_API_KEY` from Secret Manager via
+    `--set-secrets` — see "Codex CLI authentication" below.
   - `execute <executionRunId>` — run the Job once, supplying `ADA_EXECUTION_RUN_ID` as a
     per-execution override (`--update-env-vars` on `gcloud run jobs execute`). Confirmed live
     (`.agent-workflows/ada-executor-repository-checkout-live-validation/step-009.md`): this
@@ -55,7 +56,9 @@ footprint grows enough to need drift detection or multi-environment state.
 | Service account | `ada-executor-runtime@<project>.iam.gserviceaccount.com` | display name "ADA Executor Runtime" |
 | IAM binding | `roles/datastore.user` on the above SA, at project scope | Firestore IAM has no finer grain than project. Upgraded from `roles/datastore.viewer` — see "Runtime permission history" below. |
 | IAM binding | `roles/artifactregistry.writer` for `<project-number>@cloudbuild.gserviceaccount.com`, scoped to the `ada-executor` repo only (not project-wide) | needed only because local Docker is unavailable in the environment this was built in, so `build` falls back to Cloud Build, which needs write access to push the image |
-| Cloud Run Job | `ada-executor` | region `europe-west2`, 1 task, `max-retries=0`, runtime SA above, no persistent `ADA_EXECUTION_RUN_ID` |
+| Secret Manager secret | `ada-codex-api-key` (configurable via `ADA_CODEX_API_KEY_SECRET`) | created **empty** — `setup` never sets a version; see "Codex CLI authentication" below |
+| IAM binding | `roles/secretmanager.secretAccessor` on the above secret, scoped to that one secret only (not project-wide) | granted to the runtime SA so the Job can resolve `CODEX_API_KEY` at container start |
+| Cloud Run Job | `ada-executor` | region `europe-west2`, 1 task, `max-retries=0`, runtime SA above, no persistent `ADA_EXECUTION_RUN_ID`, `CODEX_API_KEY` sourced from the Secret Manager secret above via `--set-secrets` |
 
 No other roles are granted to the runtime service account. It cannot call other GCP APIs beyond
 Firestore, and has no Cloud Run/IAM/Artifact Registry permissions on itself. Cloud Build's own
@@ -82,6 +85,37 @@ repository — not the broad project Editor role GCP used to grant it automatica
   — it has **not** been run as part of this increment. The prior `roles/datastore.viewer` binding
   becomes redundant once `roles/datastore.user` is granted (the latter is a superset); removing the
   now-redundant binding is a separate, explicit cleanup step, not automated by this script.
+
+## Codex CLI authentication
+
+The executor invokes the Codex CLI as its coding-agent provider (`executor/src/codexProviderConfig.ts`
++ `executor/src/processCodingAgentRuntime.ts`), authenticated via the `CODEX_API_KEY` env var — the
+official mechanism for a non-interactive Codex process (as opposed to `codex login`, which persists
+credentials to disk and is wrong for a one-shot Cloud Run Job container).
+
+- **`setup` creates the Secret Manager secret container only, with no version.** This script never
+  reads, generates, or holds the real API key value, and it is never written to this repo, to
+  `config.env`, to Firestore, or to any execution request.
+- **Adding the real value is a separate, manual, one-time step you run yourself**, piping the value
+  in so it never touches shell history or the process list:
+  ```sh
+  printf '%s' "$YOUR_CODEX_API_KEY" | gcloud secrets versions add ada-codex-api-key \
+    --project=kanban-app-fa4b7 --data-file=-
+  ```
+- **`deploy-job` wires it at container start**, not at build time, via
+  `--set-secrets="CODEX_API_KEY=ada-codex-api-key:latest"` — Cloud Run resolves the secret's latest
+  version into the env var when the container starts; the value is never baked into the image and
+  never appears in the Job's own plain env-var configuration (`gcloud run jobs describe` shows the
+  secret reference, not the value).
+- **Never print, persist, echo, or expose `CODEX_API_KEY`** during tests, deployment, diagnostics,
+  or validation. `codexProviderConfig.ts` builds a minimal explicit child-process env
+  (`CODEX_API_KEY`, `PATH`, `HOME`) rather than passing through the executor's full environment, so
+  the sandboxed Codex process run against a materialised, attacker-influenced repository cannot
+  read any other secret the executor might hold.
+- Rotating the key: add a new secret version (`gcloud secrets versions add`); Cloud Run resolves
+  `:latest` on each new container start, so no `deploy-job` re-run is required. The previous version
+  remains readable until explicitly destroyed — see `gcloud secrets versions destroy` if rotation
+  requires revoking the old value.
 
 ## Region
 
@@ -136,3 +170,6 @@ untouched.
 - `gcloud`, authenticated (`gcloud auth login`) with access to the target project
 - Either Docker, or `gcloud builds submit` (Cloud Build) access, to build the image
 - Billing enabled on the target project (already true for `kanban-app-fa4b7`)
+- A real Codex API key, added manually as a Secret Manager secret version — see "Codex CLI
+  authentication" above; `setup` does not create or require this to complete successfully, but
+  `execute` will fail without it once the Job actually reaches the coding-agent invocation step

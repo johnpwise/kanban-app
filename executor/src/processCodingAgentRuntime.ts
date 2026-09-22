@@ -83,8 +83,12 @@ export interface ProcessCodingAgentRuntimeConfig {
   env?: NodeJS.ProcessEnv;
 }
 
+/**
+ * A real CLI coding-agent provider (e.g. Codex) reads the whole of stdin as literal prompt text,
+ * not a structured envelope — so the title and prompt are concatenated as plain text, never JSON.
+ */
 function buildStdinPayload(invocation: CodingAgentInvocation): string {
-  return JSON.stringify({ title: invocation.task.title, prompt: invocation.task.prompt });
+  return `${invocation.task.title}\n\n${invocation.task.prompt}`;
 }
 
 /**
