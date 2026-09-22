@@ -191,8 +191,10 @@ describe("createProcessInvokeCodingAgent", () => {
     await expect(invoke(invocation)).resolves.toBeUndefined();
   });
 
-  it("passes the workspace path as cwd and the task as a stdin JSON payload to the spawn primitive", async () => {
-    // Arrange
+  it("passes the workspace path as cwd and the task as a plain-text stdin payload to the spawn primitive", async () => {
+    // Arrange: a real CLI coding-agent provider (unlike the prior placeholder) reads the whole of
+    // stdin as literal prompt text, not a JSON envelope — see
+    // .agent-workflows/codex-cli-executor-provider/checkpoints/artifact-004-research-spike.checkpoint.md
     const { spawn, calls } = createFakeSpawnCodingAgentProcess({ outcome: { ok: true } });
     const invoke = createProcessInvokeCodingAgent(config, spawn);
 
@@ -201,7 +203,7 @@ describe("createProcessInvokeCodingAgent", () => {
 
     // Assert
     expect(calls[0].cwd).toBe("/workspace/path");
-    expect(JSON.parse(calls[0].stdinPayload)).toEqual({ title: "unsafe-title", prompt: "unsafe-prompt" });
+    expect(calls[0].stdinPayload).toBe("unsafe-title\n\nunsafe-prompt");
   });
 
   it("throws a safe ProcessCodingAgentRuntimeError on non_zero_exit, containing only the exit code", async () => {

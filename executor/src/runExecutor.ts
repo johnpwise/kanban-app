@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { noopInvokeCodingAgent } from "./codingAgentInvocation";
 import { parseExecutorConfig } from "./config";
+import { ProcessCodingAgentRuntimeError } from "./processCodingAgentRuntime";
 import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
 import type { InvokeCodingAgent } from "./codingAgentInvocation";
@@ -139,8 +140,14 @@ export async function runExecutor({
         task: { title: run.input.title, prompt: run.input.prompt },
         workspace: { path: workspaceOutcome.workspace.path, headSha },
       });
-    } catch {
-      logger.error("Unexpected failure invoking the coding agent.", safeIdentifiers);
+    } catch (error) {
+      // ProcessCodingAgentRuntimeError's message is documented as built only from safe,
+      // non-content values (exit codes, signal names, timeout duration) — safe to log. Any other
+      // thrown error (e.g. a provider-config validation error) may embed unsafe detail, so only
+      // this known-safe shape is included.
+      const safeErrorFields =
+        error instanceof ProcessCodingAgentRuntimeError ? { kind: error.kind, reason: error.message } : {};
+      logger.error("Unexpected failure invoking the coding agent.", { ...safeIdentifiers, ...safeErrorFields });
       return { ok: false, reason: "coding_agent_invocation_error" };
     }
 

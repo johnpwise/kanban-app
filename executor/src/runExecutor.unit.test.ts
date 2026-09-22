@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { describe, expect, it } from "vitest";
 
+import { ProcessCodingAgentRuntimeError } from "./processCodingAgentRuntime";
 import { runExecutor } from "./runExecutor";
 import { createFakeExecutionRunRepository } from "./testHelpers/fakeExecutionRunRepository";
 import { createFakeLogger } from "./testHelpers/fakeLogger";
@@ -675,6 +676,32 @@ describe("runExecutor", () => {
     expect(outcome).toEqual({ ok: false, reason: "coding_agent_invocation_error" });
     expect(cleanupCallCount()).toBe(1);
     expect(serializedLogs(logCalls)).not.toContain("unsafe coding-agent failure detail");
+  });
+
+  it("logs the safe kind/message of a ProcessCodingAgentRuntimeError when the coding agent invocation fails", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls: logCalls } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+    const { invokeCodingAgent } = createFakeInvokeCodingAgent({
+      throwError: new ProcessCodingAgentRuntimeError("non_zero_exit", "Coding-agent process exited with code 1."),
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      invokeCodingAgent,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "coding_agent_invocation_error" });
+    expect(cleanupCallCount()).toBe(1);
+    const serialized = serializedLogs(logCalls);
+    expect(serialized).toContain("non_zero_exit");
+    expect(serialized).toContain("Coding-agent process exited with code 1.");
   });
 
   it("does not invoke the coding agent when repository materialisation fails", async () => {

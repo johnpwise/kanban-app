@@ -1,10 +1,12 @@
-import { noopInvokeCodingAgent } from "./codingAgentInvocation";
+import { parseCodexProviderConfig } from "./codexProviderConfig";
 import { createFirestoreExecutionRunRepository } from "./executionRunRepository";
 import { exitCodeForOutcome } from "./exitCode";
 import { runGit } from "./gitProcess";
+import { createProcessInvokeCodingAgent } from "./processCodingAgentRuntime";
 import { materializeRepositoryWorkspace } from "./repositoryWorkspace";
 import { runExecutor } from "./runExecutor";
 
+import type { InvokeCodingAgent } from "./codingAgentInvocation";
 import type { ExecutorLogger } from "./runExecutor";
 
 /**
@@ -21,6 +23,16 @@ const jsonLogger: ExecutorLogger = {
 };
 
 /**
+ * Resolves the Codex provider config from `process.env` at invocation time, not at module load —
+ * so a missing/invalid `CODEX_API_KEY` surfaces as the existing, already-safe
+ * `coding_agent_invocation_error` outcome (via `runExecutor`'s surrounding try/catch) rather than
+ * an unhandled startup crash.
+ */
+const invokeCodingAgent: InvokeCodingAgent = async (invocation) => {
+  await createProcessInvokeCodingAgent(parseCodexProviderConfig(process.env))(invocation);
+};
+
+/**
  * The only place in this package that reads `process.env` for real or calls `process.exit`.
  * Kept intentionally thin: all branching logic lives in the fully unit-tested `runExecutor`.
  */
@@ -30,8 +42,7 @@ async function main(): Promise<void> {
     repository: createFirestoreExecutionRunRepository(),
     logger: jsonLogger,
     materializeRepositoryWorkspace: (request) => materializeRepositoryWorkspace({ ...request, runGit }),
-    // The extension point the next ADA capability replaces with a real coding-agent invocation.
-    invokeCodingAgent: noopInvokeCodingAgent,
+    invokeCodingAgent,
   });
   process.exit(exitCodeForOutcome(outcome));
 }

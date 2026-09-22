@@ -25,7 +25,7 @@ describe("processCodingAgentRuntime (real process boundary)", () => {
     }
   });
 
-  it("runs the process with the materialised workspace path as cwd, and delivers the task via stdin", async () => {
+  it("runs the process with the materialised workspace path as cwd, and delivers the task as plain text via stdin", async () => {
     // Arrange
     workspacePath = await mkdtemp(join(tmpdir(), "ada-coding-agent-workspace-"));
     const outputDir = await mkdtemp(join(tmpdir(), "ada-coding-agent-output-"));
@@ -47,7 +47,7 @@ describe("processCodingAgentRuntime (real process boundary)", () => {
     // Assert
     const recorded = JSON.parse(await readFile(outputPath, "utf8"));
     expect(recorded.cwd).toBe(await realpath(workspacePath));
-    expect(recorded.task).toEqual({ title: "task-title", prompt: "task-prompt" });
+    expect(recorded.stdinPayload).toBe("task-title\n\ntask-prompt");
     await rm(outputDir, { recursive: true, force: true });
   });
 
