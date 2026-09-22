@@ -6,10 +6,11 @@ import { ProcessCodingAgentRuntimeError } from "./processCodingAgentRuntime";
 import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
 import type { InvokeCodingAgent } from "./codingAgentInvocation";
+import type { EnsureAdaDeliveryBranch } from "./deliveryBranch";
 import type { ExecutionRunRepository } from "./executionRunRepository";
 import type { VerifyGitIntegrity } from "./gitIntegrityVerification";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
-import type { InspectWorkingTree, WorkingTreeStatus } from "./workingTreeInspection";
+import type { InspectWorkingTree } from "./workingTreeInspection";
 
 export interface ExecutorLogger {
   info(message: string, fields?: Record<string, unknown>): void;
@@ -18,7 +19,8 @@ export interface ExecutorLogger {
 
 export type ExecutorOutcome =
   | { ok: true; claimed: false }
-  | { ok: true; claimed: true; workingTree: WorkingTreeStatus }
+  | { ok: true; claimed: true; workingTree: "clean" }
+  | { ok: true; claimed: true; workingTree: "changes_detected"; deliveryBranch: string }
   | { ok: false; reason: string };
 
 export interface RunExecutorParams {
@@ -48,6 +50,13 @@ export interface RunExecutorParams {
    * outcome.
    */
   inspectWorkingTree: InspectWorkingTree;
+  /**
+   * Derives, validates, creates, and verifies the ADA delivery branch in the still-live workspace,
+   * invoked only when working-tree inspection reports `changes_detected`, before cleanup. Required,
+   * like `verifyGitIntegrity` and `inspectWorkingTree`: there is no safe default, since silently
+   * reporting a delivery branch without creating one would misrepresent the outcome.
+   */
+  ensureAdaDeliveryBranch: EnsureAdaDeliveryBranch;
   /** Generates the id persisted with a winning claim. Defaults to `randomUUID`; overridable for tests. */
   claimIdFactory?: () => string;
 }
@@ -66,6 +75,7 @@ export async function runExecutor({
   invokeCodingAgent = noopInvokeCodingAgent,
   verifyGitIntegrity,
   inspectWorkingTree,
+  ensureAdaDeliveryBranch,
   claimIdFactory = randomUUID,
 }: RunExecutorParams): Promise<ExecutorOutcome> {
   let executionRunId: string;
@@ -226,12 +236,45 @@ export async function runExecutor({
       return { ok: false, reason: "working_tree_inspection_error" };
     }
 
+    if (workingTreeOutcome.status === "clean") {
+      logger.info("Accepted execution run loaded and validated successfully.", {
+        ...safeIdentifiers,
+        headSha,
+        workingTree: "clean",
+      });
+      return { ok: true, claimed: true, workingTree: "clean" };
+    }
+
+    let deliveryBranchOutcome;
+    try {
+      deliveryBranchOutcome = await ensureAdaDeliveryBranch({
+        workspacePath: workspaceOutcome.workspace.path,
+        executionRequestId: run.executionRequestId,
+      });
+    } catch {
+      logger.error("Unexpected failure creating the ADA delivery branch.", safeIdentifiers);
+      return { ok: false, reason: "delivery_branch_error" };
+    }
+
+    if (!deliveryBranchOutcome.ok) {
+      logger.error("Failed to create the ADA delivery branch.", {
+        ...safeIdentifiers,
+        reason: deliveryBranchOutcome.reason,
+        ...("gitErrorCode" in deliveryBranchOutcome ? { gitErrorCode: deliveryBranchOutcome.gitErrorCode } : {}),
+        ...("expectedBranch" in deliveryBranchOutcome
+          ? { expectedBranch: deliveryBranchOutcome.expectedBranch, actualBranch: deliveryBranchOutcome.actualBranch }
+          : {}),
+      });
+      return { ok: false, reason: `delivery_branch_${deliveryBranchOutcome.reason}` };
+    }
+
     logger.info("Accepted execution run loaded and validated successfully.", {
       ...safeIdentifiers,
       headSha,
-      workingTree: workingTreeOutcome.status,
+      workingTree: "changes_detected",
+      deliveryBranch: deliveryBranchOutcome.branchName,
     });
-    return { ok: true, claimed: true, workingTree: workingTreeOutcome.status };
+    return { ok: true, claimed: true, workingTree: "changes_detected", deliveryBranch: deliveryBranchOutcome.branchName };
   } finally {
     await workspaceOutcome.cleanup();
   }
