@@ -266,14 +266,14 @@ describeWithEmulator("executor against the Firestore emulator", () => {
     await cardRef.delete();
   });
 
-  it("keeps the real materialised workspace on disk while downstream work runs, and removes it immediately after", async () => {
+  it("keeps the real materialised workspace on disk while the coding agent is invoked, and removes it immediately after", async () => {
     // Arrange
     const executionRequestId = `req-${randomUUID()}`;
     const runData = acceptedRunData({ executionRequestId, projectId: "project-1", cardId: "card-1" });
     await firestore.collection("executionRuns").doc(executionRequestId).set(runData);
 
-    let observedPathDuringDownstream: string | undefined;
-    let workspaceExistedDuringDownstream = false;
+    let observedInvocation: { executionRequestId: string; path: string } | undefined;
+    let workspaceExistedDuringInvocation = false;
 
     // Act
     const outcome = await runExecutor({
@@ -281,18 +281,19 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       repository: createFirestoreExecutionRunRepository(),
       logger: silentLogger,
       materializeRepositoryWorkspace: localMaterializeRepositoryWorkspace(fixture.path),
-      runDownstreamWork: async ({ workspacePath, headSha }) => {
-        observedPathDuringDownstream = workspacePath;
-        await stat(workspacePath);
-        workspaceExistedDuringDownstream = true;
-        expect(headSha).toBe(fixture.headSha);
+      invokeCodingAgent: async ({ executionRequestId: invokedExecutionRequestId, workspace }) => {
+        observedInvocation = { executionRequestId: invokedExecutionRequestId, path: workspace.path };
+        await stat(workspace.path);
+        workspaceExistedDuringInvocation = true;
+        expect(workspace.headSha).toBe(fixture.headSha);
       },
     });
 
     // Assert
     expect(outcome).toEqual({ ok: true, claimed: true });
-    expect(workspaceExistedDuringDownstream).toBe(true);
-    expect(observedPathDuringDownstream).toBeDefined();
-    await expect(stat(observedPathDuringDownstream as string)).rejects.toThrow();
+    expect(workspaceExistedDuringInvocation).toBe(true);
+    expect(observedInvocation?.executionRequestId).toBe(executionRequestId);
+    expect(observedInvocation?.path).toBeDefined();
+    await expect(stat(observedInvocation?.path as string)).rejects.toThrow();
   });
 });

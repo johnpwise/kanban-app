@@ -5,9 +5,10 @@ import { runExecutor } from "./runExecutor";
 import { createFakeExecutionRunRepository } from "./testHelpers/fakeExecutionRunRepository";
 import { createFakeLogger } from "./testHelpers/fakeLogger";
 import { createFakeMaterializeRepositoryWorkspace } from "./testHelpers/fakeMaterializeRepositoryWorkspace";
-import { createFakeRunDownstreamWork } from "./testHelpers/fakeRunDownstreamWork";
+import { createFakeInvokeCodingAgent } from "./testHelpers/fakeInvokeCodingAgent";
 
 const PROMPT = "Do not leak this prompt text into any log line.";
+const TITLE = "Do not leak this title text into any log line.";
 
 function validRunData() {
   return {
@@ -21,7 +22,7 @@ function validRunData() {
     input: {
       schemaVersion: 1,
       eventType: "ada.execution.requested",
-      title: "Ship the demo",
+      title: TITLE,
       prompt: PROMPT,
       repository: "johnpwise/kanban-app",
       baseBranch: "develop",
@@ -116,6 +117,7 @@ describe("runExecutor", () => {
       cardId: "card-1",
     });
     expect(serializedLogs(calls)).not.toContain(PROMPT);
+    expect(serializedLogs(calls)).not.toContain(TITLE);
   });
 
   it("does not attempt to claim a run that fails validation", async () => {
@@ -274,7 +276,7 @@ describe("runExecutor", () => {
     });
   });
 
-  it("never logs the prompt or full execution input", async () => {
+  it("never logs the prompt, title, or full execution input", async () => {
     // Arrange
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls } = createFakeLogger();
@@ -285,9 +287,10 @@ describe("runExecutor", () => {
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
+    expect(serializedLogs(calls)).not.toContain(TITLE);
   });
 
-  it("never logs the prompt or full input even on a malformed-run failure", async () => {
+  it("never logs the prompt, title, or full input even on a malformed-run failure", async () => {
     // Arrange
     const data = { ...validRunData(), input: { ...validRunData().input, extra: PROMPT } };
     const { repository } = createFakeExecutionRunRepository({ data: { ...data, status: "unknown" } });
@@ -299,6 +302,7 @@ describe("runExecutor", () => {
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
+    expect(serializedLogs(calls)).not.toContain(TITLE);
   });
 
   it("materialises the repository workspace exactly once, using only the immutable input's repository and baseBranch, after winning the claim", async () => {
@@ -365,7 +369,7 @@ describe("runExecutor", () => {
     expect(outcome.ok).toBe(false);
   });
 
-  it("never logs the prompt when repository materialisation fails", async () => {
+  it("never logs the prompt or title when repository materialisation fails", async () => {
     // Arrange
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls } = createFakeLogger();
@@ -376,6 +380,7 @@ describe("runExecutor", () => {
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
+    expect(serializedLogs(calls)).not.toContain(TITLE);
   });
 
   it("logs the safe git exit code alongside the reason when repository materialisation fails with a git failure", async () => {
@@ -594,7 +599,7 @@ describe("runExecutor", () => {
     expect(cleanupCallCount()).toBe(1);
   });
 
-  it("invokes downstream work with the live workspace path and resolved head SHA, before cleanup runs", async () => {
+  it("invokes the coding agent with the execution request id, task, and live workspace, before cleanup runs", async () => {
     // Arrange
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
@@ -602,7 +607,7 @@ describe("runExecutor", () => {
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
     let cleanupCallCountAtInvocation = -1;
-    const { runDownstreamWork, calls } = createFakeRunDownstreamWork({
+    const { invokeCodingAgent, calls } = createFakeInvokeCodingAgent({
       onCall: () => {
         cleanupCallCountAtInvocation = cleanupCallCount();
       },
@@ -614,22 +619,26 @@ describe("runExecutor", () => {
       repository,
       logger,
       materializeRepositoryWorkspace,
-      runDownstreamWork,
+      invokeCodingAgent,
     });
 
     // Assert
     expect(calls).toEqual([
-      { workspacePath: "/tmp/fake-workspace", headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" },
+      {
+        executionRequestId: "req-1",
+        task: { title: TITLE, prompt: PROMPT },
+        workspace: { path: "/tmp/fake-workspace", headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" },
+      },
     ]);
     expect(cleanupCallCountAtInvocation).toBe(0);
   });
 
-  it("cleans up the workspace exactly once after downstream work completes successfully", async () => {
+  it("cleans up the workspace exactly once after the coding agent invocation completes successfully", async () => {
     // Arrange
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
-    const { runDownstreamWork } = createFakeRunDownstreamWork();
+    const { invokeCodingAgent } = createFakeInvokeCodingAgent();
 
     // Act
     await runExecutor({
@@ -637,20 +646,20 @@ describe("runExecutor", () => {
       repository,
       logger,
       materializeRepositoryWorkspace,
-      runDownstreamWork,
+      invokeCodingAgent,
     });
 
     // Assert
     expect(cleanupCallCount()).toBe(1);
   });
 
-  it("cleans up the workspace exactly once, and returns a safe failure outcome, when downstream work throws", async () => {
+  it("cleans up the workspace exactly once, and returns a safe failure outcome, when the coding agent invocation throws", async () => {
     // Arrange
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls: logCalls } = createFakeLogger();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
-    const { runDownstreamWork } = createFakeRunDownstreamWork({
-      throwError: new Error("unsafe downstream failure detail"),
+    const { invokeCodingAgent } = createFakeInvokeCodingAgent({
+      throwError: new Error("unsafe coding-agent failure detail"),
     });
 
     // Act
@@ -659,21 +668,21 @@ describe("runExecutor", () => {
       repository,
       logger,
       materializeRepositoryWorkspace,
-      runDownstreamWork,
+      invokeCodingAgent,
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: false, reason: "downstream_work_error" });
+    expect(outcome).toEqual({ ok: false, reason: "coding_agent_invocation_error" });
     expect(cleanupCallCount()).toBe(1);
-    expect(serializedLogs(logCalls)).not.toContain("unsafe downstream failure detail");
+    expect(serializedLogs(logCalls)).not.toContain("unsafe coding-agent failure detail");
   });
 
-  it("does not invoke downstream work when repository materialisation fails", async () => {
+  it("does not invoke the coding agent when repository materialisation fails", async () => {
     // Arrange
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "clone_failed" });
-    const { runDownstreamWork, calls } = createFakeRunDownstreamWork();
+    const { invokeCodingAgent, calls } = createFakeInvokeCodingAgent();
 
     // Act
     await runExecutor({
@@ -681,14 +690,14 @@ describe("runExecutor", () => {
       repository,
       logger,
       materializeRepositoryWorkspace,
-      runDownstreamWork,
+      invokeCodingAgent,
     });
 
     // Assert
     expect(calls).toEqual([]);
   });
 
-  it("does not invoke downstream work when another executor already owns the claim", async () => {
+  it("does not invoke the coding agent when another executor already owns the claim", async () => {
     // Arrange
     const { repository } = createFakeExecutionRunRepository({
       data: validRunData(),
@@ -696,7 +705,7 @@ describe("runExecutor", () => {
     });
     const { logger } = createFakeLogger();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
-    const { runDownstreamWork, calls } = createFakeRunDownstreamWork();
+    const { invokeCodingAgent, calls } = createFakeInvokeCodingAgent();
 
     // Act
     await runExecutor({
@@ -704,14 +713,14 @@ describe("runExecutor", () => {
       repository,
       logger,
       materializeRepositoryWorkspace,
-      runDownstreamWork,
+      invokeCodingAgent,
     });
 
     // Assert
     expect(calls).toEqual([]);
   });
 
-  it("never logs the prompt when recording the source revision fails", async () => {
+  it("never logs the prompt or title when recording the source revision fails", async () => {
     // Arrange
     const { repository } = createFakeExecutionRunRepository({
       data: validRunData(),
@@ -725,5 +734,6 @@ describe("runExecutor", () => {
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
+    expect(serializedLogs(calls)).not.toContain(TITLE);
   });
 });
