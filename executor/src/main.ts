@@ -1,8 +1,11 @@
 import { parseCodexProviderConfig } from "./codexProviderConfig";
 import { ensureAdaDeliveryBranch } from "./deliveryBranch";
 import { ensureAdaDeliveryCommit } from "./deliveryCommit";
+import { ensureAdaDeliveryPush } from "./deliveryPush";
 import { createFirestoreExecutionRunRepository } from "./executionRunRepository";
 import { exitCodeForOutcome } from "./exitCode";
+import { mintGithubDeliveryCredential } from "./githubAppCredential";
+import type { MintGithubDeliveryCredential } from "./githubAppCredential";
 import { verifyGitIntegrity } from "./gitIntegrityVerification";
 import { runGit } from "./gitProcess";
 import { createProcessInvokeCodingAgent } from "./processCodingAgentRuntime";
@@ -37,6 +40,15 @@ const invokeCodingAgent: InvokeCodingAgent = async (invocation) => {
 };
 
 /**
+ * Resolves the GitHub App installation credential from `process.env` at invocation time, like
+ * `invokeCodingAgent` above — reads only the `ADA_GITHUB_APP_*` env vars, a distinct namespace
+ * from `CODEX_*`, so this credential can never collide with or be pulled into the coding-agent
+ * child-process env built by `parseCodexProviderConfig`.
+ */
+const mintDeliveryCredential: MintGithubDeliveryCredential = ({ repository }) =>
+  mintGithubDeliveryCredential({ repository, env: process.env, now: Date.now, fetchImpl: fetch });
+
+/**
  * The only place in this package that reads `process.env` for real or calls `process.exit`.
  * Kept intentionally thin: all branching logic lives in the fully unit-tested `runExecutor`.
  */
@@ -51,6 +63,8 @@ async function main(): Promise<void> {
     inspectWorkingTree: (request) => inspectWorkingTree({ ...request, runGit }),
     ensureAdaDeliveryBranch: (request) => ensureAdaDeliveryBranch({ ...request, runGit }),
     ensureAdaDeliveryCommit: (request) => ensureAdaDeliveryCommit({ ...request, runGit }),
+    ensureAdaDeliveryPush: (request) =>
+      ensureAdaDeliveryPush({ ...request, env: process.env, runGit, mintCredential: mintDeliveryCredential }),
   });
   process.exit(exitCodeForOutcome(outcome));
 }

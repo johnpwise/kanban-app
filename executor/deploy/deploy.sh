@@ -53,6 +53,7 @@ fi
 : "${ADA_JOB_NAME:?Set ADA_JOB_NAME (see config.env.example)}"
 : "${ADA_RUNTIME_SERVICE_ACCOUNT:?Set ADA_RUNTIME_SERVICE_ACCOUNT (see config.env.example)}"
 : "${ADA_CODEX_API_KEY_SECRET:?Set ADA_CODEX_API_KEY_SECRET (see config.env.example)}"
+: "${ADA_GITHUB_APP_PRIVATE_KEY_SECRET:?Set ADA_GITHUB_APP_PRIVATE_KEY_SECRET (see config.env.example)}"
 
 PROJECT_ID="$ADA_GCP_PROJECT_ID"
 REGION="$ADA_GCP_REGION"
@@ -61,6 +62,13 @@ IMAGE_NAME="$ADA_IMAGE_NAME"
 JOB_NAME="$ADA_JOB_NAME"
 RUNTIME_SA="$ADA_RUNTIME_SERVICE_ACCOUNT"
 CODEX_SECRET_NAME="$ADA_CODEX_API_KEY_SECRET"
+GITHUB_APP_PRIVATE_KEY_SECRET_NAME="$ADA_GITHUB_APP_PRIVATE_KEY_SECRET"
+# Not secrets (visible on the GitHub App's own settings/installation pages) — only known after the
+# separate manual step of creating and installing the App (see "GitHub App delivery credential" in
+# deploy/README.md). Left unset, `deploy-job` omits them and the durable-push step fails safely at
+# the (typed) credential-config-invalid outcome rather than blocking unrelated deploys.
+GITHUB_APP_ID="${ADA_GITHUB_APP_ID:-}"
+GITHUB_APP_INSTALLATION_ID="${ADA_GITHUB_APP_INSTALLATION_ID:-}"
 LAST_IMAGE_FILE="$SCRIPT_DIR/.last-image"
 
 require_cmd() {
@@ -160,6 +168,26 @@ cmd_setup() {
     --role="roles/secretmanager.secretAccessor" \
     >/dev/null
 
+  echo "==> Ensuring Secret Manager secret '$GITHUB_APP_PRIVATE_KEY_SECRET_NAME' exists (empty — this"
+  echo "    script never reads, writes, or holds the real GitHub App private key; see 'GitHub App"
+  echo "    delivery credential' in deploy/README.md for the manual steps that create the App and"
+  echo "    add the actual key)"
+  if gcloud secrets describe "$GITHUB_APP_PRIVATE_KEY_SECRET_NAME" --project="$PROJECT_ID" >/dev/null 2>&1; then
+    echo "    already exists, skipping create"
+  else
+    gcloud secrets create "$GITHUB_APP_PRIVATE_KEY_SECRET_NAME" \
+      --project="$PROJECT_ID" \
+      --replication-policy="automatic"
+  fi
+
+  echo "==> Ensuring '$RUNTIME_SA' can access '$GITHUB_APP_PRIVATE_KEY_SECRET_NAME' only"
+  echo "    (roles/secretmanager.secretAccessor, scoped to this one secret, not project-wide)"
+  gcloud secrets add-iam-policy-binding "$GITHUB_APP_PRIVATE_KEY_SECRET_NAME" \
+    --project="$PROJECT_ID" \
+    --member="serviceAccount:$RUNTIME_SA" \
+    --role="roles/secretmanager.secretAccessor" \
+    >/dev/null
+
   echo "==> Setup complete."
 }
 
@@ -196,17 +224,32 @@ cmd_deploy_job() {
 
   echo "==> Deploying (create-or-update) Cloud Run Job '$JOB_NAME' in $REGION with image $image"
   echo "    ADA_EXECUTION_RUN_ID is intentionally NOT set here — it is supplied per execution."
-  echo "    CODEX_API_KEY is populated from Secret Manager at container start (--set-secrets), so"
-  echo "    the real key value never appears in this script, in config.env, in the Job's own"
-  echo "    plain env-var config, or in Cloud Logging."
-  gcloud run jobs deploy "$JOB_NAME" \
-    --image="$image" \
-    --region="$REGION" \
-    --project="$PROJECT_ID" \
-    --tasks=1 \
-    --max-retries=0 \
-    --service-account="$RUNTIME_SA" \
-    --set-secrets="CODEX_API_KEY=${CODEX_SECRET_NAME}:latest"
+  echo "    CODEX_API_KEY and ADA_GITHUB_APP_PRIVATE_KEY are populated from Secret Manager at"
+  echo "    container start (--set-secrets), so neither real value ever appears in this script, in"
+  echo "    config.env, in the Job's own plain env-var config, or in Cloud Logging."
+
+  local deploy_args=(
+    "$JOB_NAME"
+    --image="$image"
+    --region="$REGION"
+    --project="$PROJECT_ID"
+    --tasks=1
+    --max-retries=0
+    --service-account="$RUNTIME_SA"
+    --set-secrets="CODEX_API_KEY=${CODEX_SECRET_NAME}:latest,ADA_GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY_SECRET_NAME}:latest"
+  )
+
+  if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" ]]; then
+    echo "    ADA_GITHUB_APP_ID / ADA_GITHUB_APP_INSTALLATION_ID set from config (not secrets)."
+    deploy_args+=(--set-env-vars="ADA_GITHUB_APP_ID=${GITHUB_APP_ID},ADA_GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID}")
+  else
+    echo "    ADA_GITHUB_APP_ID / ADA_GITHUB_APP_INSTALLATION_ID not set — the GitHub App has not"
+    echo "    been created/installed yet (see 'GitHub App delivery credential' in deploy/README.md)."
+    echo "    Deploying without them: the durable-push step will fail safely (typed"
+    echo "    'config_invalid' outcome) without blocking the rest of this deploy."
+  fi
+
+  gcloud run jobs deploy "${deploy_args[@]}"
 
   echo "==> Job deployed."
 }

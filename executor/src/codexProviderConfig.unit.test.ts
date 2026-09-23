@@ -137,6 +137,30 @@ describe("parseCodexProviderConfig", () => {
       expect(result.env).not.toHaveProperty("FIRESTORE_EMULATOR_HOST");
     });
 
+    it("never passes the ADA GitHub delivery credential (App ID, private key, installation id) through to the coding-agent env", () => {
+      // Arrange — the executor's ambient process.env may legitimately hold the GitHub delivery
+      // credential (read by the separate `githubAppCredential.ts` module for the push step), but
+      // it must never reach the coding-agent child process spawned from this config.
+      const env = {
+        CODEX_API_KEY: "test-key",
+        PATH: "/usr/bin",
+        HOME: "/home/node",
+        ADA_GITHUB_APP_ID: "123456",
+        ADA_GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\ndistinctive-key-material\n-----END PRIVATE KEY-----",
+        ADA_GITHUB_APP_INSTALLATION_ID: "987654",
+      };
+
+      // Act
+      const result = parseCodexProviderConfig(env);
+
+      // Assert
+      expect(Object.keys(result.env).sort()).toEqual(["CODEX_API_KEY", "HOME", "PATH"]);
+      expect(result.env).not.toHaveProperty("ADA_GITHUB_APP_ID");
+      expect(result.env).not.toHaveProperty("ADA_GITHUB_APP_PRIVATE_KEY");
+      expect(result.env).not.toHaveProperty("ADA_GITHUB_APP_INSTALLATION_ID");
+      expect(JSON.stringify(result.env)).not.toContain("distinctive-key-material");
+    });
+
     it("never includes the CODEX_API_KEY value in a thrown validation error's message", () => {
       // Arrange
       const env = { CODEX_API_KEY: "distinctive-secret-value", CODEX_TIMEOUT_MS: "not-a-number" };
