@@ -126,4 +126,53 @@ describe("runGit", () => {
     // Act & Assert
     await expect(runGit({ args: ["status"] })).resolves.toEqual({ ok: false, stderr: "", code: "ENOENT" });
   });
+
+  describe("env override", () => {
+    it("passes through the ambient process.env by default, unchanged from today", async () => {
+      // Arrange
+      process.env.ADA_TEST_AMBIENT_VAR = "ambient-value";
+      execFileMock.mockImplementation((_file, _args, _options, callback) => callback(null, "", ""));
+
+      try {
+        // Act
+        await runGit({ args: ["status"] });
+
+        // Assert
+        const [, , options] = execFileMock.mock.calls[0];
+        expect(options.env.ADA_TEST_AMBIENT_VAR).toBe("ambient-value");
+      } finally {
+        delete process.env.ADA_TEST_AMBIENT_VAR;
+      }
+    });
+
+    it("uses only the explicitly provided env when one is given, never merging in the ambient process.env", async () => {
+      // Arrange
+      process.env.ADA_TEST_AMBIENT_VAR = "ambient-value";
+      execFileMock.mockImplementation((_file, _args, _options, callback) => callback(null, "", ""));
+
+      try {
+        // Act
+        await runGit({ args: ["push"], env: { PATH: "/usr/bin", CUSTOM_TOKEN_VAR: "scoped-token" } });
+
+        // Assert
+        const [, , options] = execFileMock.mock.calls[0];
+        expect(options.env).toEqual({ PATH: "/usr/bin", CUSTOM_TOKEN_VAR: "scoped-token", GIT_TERMINAL_PROMPT: "0" });
+        expect(options.env).not.toHaveProperty("ADA_TEST_AMBIENT_VAR");
+      } finally {
+        delete process.env.ADA_TEST_AMBIENT_VAR;
+      }
+    });
+
+    it("still forces GIT_TERMINAL_PROMPT=0 even when an explicit env is provided", async () => {
+      // Arrange
+      execFileMock.mockImplementation((_file, _args, _options, callback) => callback(null, "", ""));
+
+      // Act
+      await runGit({ args: ["push"], env: { PATH: "/usr/bin" } });
+
+      // Assert
+      const [, , options] = execFileMock.mock.calls[0];
+      expect(options.env.GIT_TERMINAL_PROMPT).toBe("0");
+    });
+  });
 });

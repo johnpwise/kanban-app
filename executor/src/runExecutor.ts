@@ -1,17 +1,64 @@
 import { randomUUID } from "node:crypto";
 
+import { buildAdaPullRequestTitle } from "./adaPullRequest";
+import { noopInvokeCodingAgent } from "./codingAgentInvocation";
 import { parseExecutorConfig } from "./config";
+import { ProcessCodingAgentRuntimeError } from "./processCodingAgentRuntime";
 import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
+import type { CreateOrReuseAdaPullRequest, CreateOrReuseAdaPullRequestOutcome } from "./adaPullRequest";
+import type { InvokeCodingAgent } from "./codingAgentInvocation";
+import type { EnsureAdaDeliveryBranch } from "./deliveryBranch";
+import type { EnsureAdaDeliveryCommit } from "./deliveryCommit";
+import type { EnsureAdaDeliveryPush } from "./deliveryPush";
 import type { ExecutionRunRepository } from "./executionRunRepository";
+import type { VerifyGitIntegrity } from "./gitIntegrityVerification";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
+import type { InspectWorkingTree } from "./workingTreeInspection";
 
 export interface ExecutorLogger {
   info(message: string, fields?: Record<string, unknown>): void;
   error(message: string, fields?: Record<string, unknown>): void;
 }
 
-export type ExecutorOutcome = { ok: true; claimed: boolean } | { ok: false; reason: string };
+/**
+ * Distinguishes "the local ADA delivery commit was created" (always true once `changes_detected`
+ * is reached) from "that commit was durably published to GitHub and independently verified". A
+ * push/verification failure never turns the overall outcome into `ok: false`: the local commit is
+ * still valid, so this is reported as a `status: "failed"` remote-delivery result, not an
+ * executor-level failure.
+ */
+export type RemoteDeliveryOutcome =
+  | { status: "verified"; remoteBranch: string; remoteSha: string }
+  | { status: "failed"; reason: string };
+
+type PullRequestFailureOutcome = Extract<CreateOrReuseAdaPullRequestOutcome, { ok: false }>;
+
+/**
+ * Absent (rather than a `"skipped"` variant) whenever no attempt was made — `remoteDelivery` is
+ * not `"verified"`, or no `createOrReuseAdaPullRequest` dependency was supplied. Present whenever
+ * an attempt was made, whether it succeeded or failed: a failure here never invalidates the
+ * already-durable `remoteDelivery`, so it is reported alongside it, not in place of it.
+ */
+export type PullRequestOutcome =
+  | { status: "created"; number: number; htmlUrl: string }
+  | { status: "existing"; number: number; htmlUrl: string }
+  | ({ status: "failed" } & Omit<PullRequestFailureOutcome, "ok">)
+  | { status: "failed"; reason: "pull_request_error" };
+
+export type ExecutorOutcome =
+  | { ok: true; claimed: false }
+  | { ok: true; claimed: true; workingTree: "clean" }
+  | {
+      ok: true;
+      claimed: true;
+      workingTree: "changes_detected";
+      deliveryBranch: string;
+      deliveryCommitSha: string;
+      remoteDelivery: RemoteDeliveryOutcome;
+      pullRequest?: PullRequestOutcome;
+    }
+  | { ok: false; reason: string };
 
 export interface RunExecutorParams {
   env: Record<string, string | undefined>;
@@ -19,6 +66,59 @@ export interface RunExecutorParams {
   logger: ExecutorLogger;
   /** Materialises the immutable input's repository/baseBranch. Only ever called after a winning claim. */
   materializeRepositoryWorkspace: MaterializeRepositoryWorkspace;
+  /**
+   * Invoked against the still-live workspace, after `sourceRevision` is durably persisted and
+   * before cleanup. Defaults to a no-op; overridable so a future ADA capability can plug in a real
+   * coding-agent runtime without changing this composition.
+   */
+  invokeCodingAgent?: InvokeCodingAgent;
+  /**
+   * Verifies, against the still-live workspace, that a successful coding-agent invocation left
+   * `HEAD` and the checked-out branch exactly as materialised — before working-tree inspection
+   * runs. Required, like `materializeRepositoryWorkspace`: there is no safe default, since
+   * silently reporting "verified" without checking would misrepresent the outcome. ADA retains
+   * ownership of Git history and delivery; this is the boundary that enforces it.
+   */
+  verifyGitIntegrity: VerifyGitIntegrity;
+  /**
+   * Inspects the still-live workspace's Git working tree after git source-control integrity is
+   * verified and before cleanup. Required, like `materializeRepositoryWorkspace`: there is no
+   * safe default, since silently reporting "clean" without checking would misrepresent the
+   * outcome.
+   */
+  inspectWorkingTree: InspectWorkingTree;
+  /**
+   * Derives, validates, creates, and verifies the ADA delivery branch in the still-live workspace,
+   * invoked only when working-tree inspection reports `changes_detected`, before cleanup. Required,
+   * like `verifyGitIntegrity` and `inspectWorkingTree`: there is no safe default, since silently
+   * reporting a delivery branch without creating one would misrepresent the outcome.
+   */
+  ensureAdaDeliveryBranch: EnsureAdaDeliveryBranch;
+  /**
+   * Stages the coding-agent working-tree delta, creates the single ADA-owned local commit, and
+   * verifies its resulting history/branch/parent, invoked only after the ADA delivery branch is
+   * created and verified, before cleanup. Required, like `ensureAdaDeliveryBranch`: there is no
+   * safe default, since silently reporting a delivery commit without creating one would
+   * misrepresent the outcome.
+   */
+  ensureAdaDeliveryCommit: EnsureAdaDeliveryCommit;
+  /**
+   * Publishes the verified local ADA delivery commit to GitHub and independently verifies it,
+   * invoked only after the local delivery commit is created and verified, before cleanup.
+   * Required, like `ensureAdaDeliveryCommit`: there is no safe default, since silently reporting a
+   * verified remote branch without publishing one would misrepresent the outcome. Unlike the
+   * branch/commit steps, a failure here does not fail the overall outcome — see `RemoteDeliveryOutcome`.
+   */
+  ensureAdaDeliveryPush: EnsureAdaDeliveryPush;
+  /**
+   * Creates or idempotently reuses the GitHub Pull Request for the verified ADA delivery branch,
+   * invoked only when `remoteDelivery.status === "verified"`, before cleanup. Optional, unlike the
+   * required delivery steps above: the already-durable remote delivery branch is a complete,
+   * valid outcome on its own (see `RemoteDeliveryOutcome`'s JSDoc), so omitting this dependency
+   * safely means "no PR attempt is made" rather than misrepresenting anything — mirroring
+   * `invokeCodingAgent`'s optional/no-default shape, not the required delivery steps'.
+   */
+  createOrReuseAdaPullRequest?: CreateOrReuseAdaPullRequest;
   /** Generates the id persisted with a winning claim. Defaults to `randomUUID`; overridable for tests. */
   claimIdFactory?: () => string;
 }
@@ -34,6 +134,13 @@ export async function runExecutor({
   repository,
   logger,
   materializeRepositoryWorkspace,
+  invokeCodingAgent = noopInvokeCodingAgent,
+  verifyGitIntegrity,
+  inspectWorkingTree,
+  ensureAdaDeliveryBranch,
+  ensureAdaDeliveryCommit,
+  ensureAdaDeliveryPush,
+  createOrReuseAdaPullRequest,
   claimIdFactory = randomUUID,
 }: RunExecutorParams): Promise<ExecutorOutcome> {
   let executionRunId: string;
@@ -124,11 +231,246 @@ export async function runExecutor({
       return { ok: false, reason: "source_revision_conflict" };
     }
 
+    try {
+      await invokeCodingAgent({
+        executionRequestId: run.executionRequestId,
+        task: { title: run.input.title, prompt: run.input.prompt },
+        workspace: { path: workspaceOutcome.workspace.path, headSha },
+      });
+    } catch (error) {
+      // ProcessCodingAgentRuntimeError's message is documented as built only from safe,
+      // non-content values (exit codes, signal names, timeout duration) — safe to log. Any other
+      // thrown error (e.g. a provider-config validation error) may embed unsafe detail, so only
+      // this known-safe shape is included.
+      const safeErrorFields =
+        error instanceof ProcessCodingAgentRuntimeError ? { kind: error.kind, reason: error.message } : {};
+      logger.error("Unexpected failure invoking the coding agent.", { ...safeIdentifiers, ...safeErrorFields });
+      return { ok: false, reason: "coding_agent_invocation_error" };
+    }
+
+    let gitIntegrityOutcome;
+    try {
+      gitIntegrityOutcome = await verifyGitIntegrity({
+        workspacePath: workspaceOutcome.workspace.path,
+        expectedHeadSha: headSha,
+        expectedBranch: run.input.baseBranch,
+      });
+    } catch {
+      logger.error("Unexpected failure verifying Git source-control integrity.", safeIdentifiers);
+      return { ok: false, reason: "git_integrity_inspection_failed" };
+    }
+
+    if (!gitIntegrityOutcome.ok) {
+      if (gitIntegrityOutcome.reason === "head_changed") {
+        logger.error("Coding-agent invocation left HEAD changed from the persisted source revision.", {
+          ...safeIdentifiers,
+          expectedHeadSha: gitIntegrityOutcome.expectedHeadSha,
+          actualHeadSha: gitIntegrityOutcome.actualHeadSha,
+        });
+        return { ok: false, reason: "git_integrity_head_changed" };
+      }
+      if (gitIntegrityOutcome.reason === "branch_changed") {
+        logger.error("Coding-agent invocation left the checked-out branch changed from the requested baseBranch.", {
+          ...safeIdentifiers,
+          expectedBranch: gitIntegrityOutcome.expectedBranch,
+          actualBranch: gitIntegrityOutcome.actualBranch,
+        });
+        return { ok: false, reason: "git_integrity_branch_changed" };
+      }
+      logger.error("Failed to verify Git source-control integrity.", {
+        ...safeIdentifiers,
+        stage: gitIntegrityOutcome.stage,
+        gitErrorCode: gitIntegrityOutcome.gitErrorCode,
+      });
+      return { ok: false, reason: "git_integrity_inspection_failed" };
+    }
+
+    let workingTreeOutcome;
+    try {
+      workingTreeOutcome = await inspectWorkingTree({ workspacePath: workspaceOutcome.workspace.path });
+    } catch {
+      logger.error("Unexpected failure inspecting the working tree.", safeIdentifiers);
+      return { ok: false, reason: "working_tree_inspection_error" };
+    }
+
+    if (!workingTreeOutcome.ok) {
+      logger.error("Failed to inspect the working tree.", {
+        ...safeIdentifiers,
+        gitErrorCode: workingTreeOutcome.gitErrorCode,
+      });
+      return { ok: false, reason: "working_tree_inspection_error" };
+    }
+
+    if (workingTreeOutcome.status === "clean") {
+      logger.info("Accepted execution run loaded and validated successfully.", {
+        ...safeIdentifiers,
+        headSha,
+        workingTree: "clean",
+      });
+      return { ok: true, claimed: true, workingTree: "clean" };
+    }
+
+    let deliveryBranchOutcome;
+    try {
+      deliveryBranchOutcome = await ensureAdaDeliveryBranch({
+        workspacePath: workspaceOutcome.workspace.path,
+        executionRequestId: run.executionRequestId,
+      });
+    } catch {
+      logger.error("Unexpected failure creating the ADA delivery branch.", safeIdentifiers);
+      return { ok: false, reason: "delivery_branch_error" };
+    }
+
+    if (!deliveryBranchOutcome.ok) {
+      logger.error("Failed to create the ADA delivery branch.", {
+        ...safeIdentifiers,
+        reason: deliveryBranchOutcome.reason,
+        ...("gitErrorCode" in deliveryBranchOutcome ? { gitErrorCode: deliveryBranchOutcome.gitErrorCode } : {}),
+        ...("expectedBranch" in deliveryBranchOutcome
+          ? { expectedBranch: deliveryBranchOutcome.expectedBranch, actualBranch: deliveryBranchOutcome.actualBranch }
+          : {}),
+      });
+      return { ok: false, reason: `delivery_branch_${deliveryBranchOutcome.reason}` };
+    }
+
+    let deliveryCommitOutcome;
+    try {
+      deliveryCommitOutcome = await ensureAdaDeliveryCommit({
+        workspacePath: workspaceOutcome.workspace.path,
+        executionRequestId: run.executionRequestId,
+        expectedBranch: deliveryBranchOutcome.branchName,
+        expectedParentSha: headSha,
+      });
+    } catch {
+      logger.error("Unexpected failure creating the ADA delivery commit.", safeIdentifiers);
+      return { ok: false, reason: "delivery_commit_error" };
+    }
+
+    if (!deliveryCommitOutcome.ok) {
+      logger.error("Failed to create the ADA delivery commit.", {
+        ...safeIdentifiers,
+        reason: deliveryCommitOutcome.reason,
+        ...("gitErrorCode" in deliveryCommitOutcome ? { gitErrorCode: deliveryCommitOutcome.gitErrorCode } : {}),
+        ...("expectedBranch" in deliveryCommitOutcome
+          ? { expectedBranch: deliveryCommitOutcome.expectedBranch, actualBranch: deliveryCommitOutcome.actualBranch }
+          : {}),
+        ...("expectedParentSha" in deliveryCommitOutcome
+          ? {
+              expectedParentSha: deliveryCommitOutcome.expectedParentSha,
+              actualParentSha: deliveryCommitOutcome.actualParentSha,
+            }
+          : {}),
+        ...("expectedCommitSha" in deliveryCommitOutcome
+          ? { expectedCommitSha: deliveryCommitOutcome.expectedCommitSha, actualHeadSha: deliveryCommitOutcome.actualHeadSha }
+          : {}),
+        ...("stage" in deliveryCommitOutcome ? { stage: deliveryCommitOutcome.stage } : {}),
+      });
+      return { ok: false, reason: `delivery_commit_${deliveryCommitOutcome.reason}` };
+    }
+
+    let remoteDelivery: RemoteDeliveryOutcome;
+    let pullRequest: PullRequestOutcome | undefined;
+    try {
+      const deliveryPushOutcome = await ensureAdaDeliveryPush({
+        workspacePath: workspaceOutcome.workspace.path,
+        repository: run.input.repository,
+        deliveryBranch: deliveryBranchOutcome.branchName,
+        deliveryCommitSha: deliveryCommitOutcome.commitSha,
+      });
+
+      if (deliveryPushOutcome.ok) {
+        remoteDelivery = {
+          status: "verified",
+          remoteBranch: deliveryPushOutcome.remoteBranch,
+          remoteSha: deliveryPushOutcome.remoteSha,
+        };
+        logger.info("Published and independently verified the ADA delivery branch.", {
+          ...safeIdentifiers,
+          deliveryBranch: deliveryPushOutcome.remoteBranch,
+          remoteSha: deliveryPushOutcome.remoteSha,
+        });
+
+        if (createOrReuseAdaPullRequest) {
+          try {
+            const pullRequestOutcome = await createOrReuseAdaPullRequest({
+              repository: run.input.repository,
+              head: deliveryBranchOutcome.branchName,
+              base: run.input.baseBranch,
+              executionRequestId: run.executionRequestId,
+              deliveryCommitSha: deliveryCommitOutcome.commitSha,
+              title: buildAdaPullRequestTitle(run.input.title, run.executionRequestId),
+            });
+
+            if (pullRequestOutcome.ok) {
+              pullRequest = {
+                status: pullRequestOutcome.status,
+                number: pullRequestOutcome.number,
+                htmlUrl: pullRequestOutcome.htmlUrl,
+              };
+              logger.info("Created or reused the GitHub Pull Request for the verified ADA delivery branch.", {
+                ...safeIdentifiers,
+                pullRequestStatus: pullRequestOutcome.status,
+                pullRequestNumber: pullRequestOutcome.number,
+              });
+            } else {
+              const safePullRequestFields = {
+                reason: pullRequestOutcome.reason,
+                ...("credentialReason" in pullRequestOutcome ? { credentialReason: pullRequestOutcome.credentialReason } : {}),
+                ...("httpStatus" in pullRequestOutcome ? { httpStatus: pullRequestOutcome.httpStatus } : {}),
+              };
+              pullRequest = { status: "failed", ...safePullRequestFields };
+              logger.error("Failed to create or reuse the GitHub Pull Request; the verified remote delivery branch remains valid.", {
+                ...safeIdentifiers,
+                ...safePullRequestFields,
+              });
+            }
+          } catch {
+            pullRequest = { status: "failed", reason: "pull_request_error" };
+            logger.error(
+              "Unexpected failure creating or reusing the GitHub Pull Request; the verified remote delivery branch remains valid.",
+              safeIdentifiers,
+            );
+          }
+        }
+      } else {
+        remoteDelivery = { status: "failed", reason: deliveryPushOutcome.reason };
+        logger.error("Failed to durably publish the ADA delivery branch; the local delivery commit remains valid.", {
+          ...safeIdentifiers,
+          reason: deliveryPushOutcome.reason,
+          ...("gitErrorCode" in deliveryPushOutcome ? { gitErrorCode: deliveryPushOutcome.gitErrorCode } : {}),
+          ...("credentialReason" in deliveryPushOutcome ? { credentialReason: deliveryPushOutcome.credentialReason } : {}),
+          ...("httpStatus" in deliveryPushOutcome ? { httpStatus: deliveryPushOutcome.httpStatus } : {}),
+          ...("expectedSha" in deliveryPushOutcome
+            ? { expectedSha: deliveryPushOutcome.expectedSha, actualSha: deliveryPushOutcome.actualSha }
+            : {}),
+        });
+      }
+    } catch {
+      remoteDelivery = { status: "failed", reason: "delivery_push_error" };
+      logger.error(
+        "Unexpected failure publishing the ADA delivery branch; the local delivery commit remains valid.",
+        safeIdentifiers,
+      );
+    }
+
     logger.info("Accepted execution run loaded and validated successfully.", {
       ...safeIdentifiers,
       headSha,
+      workingTree: "changes_detected",
+      deliveryBranch: deliveryBranchOutcome.branchName,
+      deliveryCommitSha: deliveryCommitOutcome.commitSha,
+      remoteDeliveryStatus: remoteDelivery.status,
+      ...(pullRequest ? { pullRequestStatus: pullRequest.status } : {}),
     });
-    return { ok: true, claimed: true };
+    return {
+      ok: true,
+      claimed: true,
+      workingTree: "changes_detected",
+      deliveryBranch: deliveryBranchOutcome.branchName,
+      deliveryCommitSha: deliveryCommitOutcome.commitSha,
+      remoteDelivery,
+      ...(pullRequest ? { pullRequest } : {}),
+    };
   } finally {
     await workspaceOutcome.cleanup();
   }

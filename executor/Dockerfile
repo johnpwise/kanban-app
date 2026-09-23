@@ -20,6 +20,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
+# Codex CLI is a runtime capability the executor shells out to (see processCodingAgentRuntime.ts +
+# codexProviderConfig.ts), not an imported module — installed globally here, matching the
+# git/ca-certificates pattern above, and pinned to an exact version (never a range or `latest`)
+# for deterministic, reproducible builds. See the dependency assessment at
+# .agent-workflows/codex-cli-executor-provider/checkpoints/artifact-005-dependency-assessment.checkpoint.md.
+RUN npm install -g @openai/codex@0.155.1
 COPY --from=build /app/lib ./lib
 USER node
 
