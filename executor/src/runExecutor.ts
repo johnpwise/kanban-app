@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 
+import { buildAdaPullRequestTitle } from "./adaPullRequest";
 import { noopInvokeCodingAgent } from "./codingAgentInvocation";
 import { parseExecutorConfig } from "./config";
 import { ProcessCodingAgentRuntimeError } from "./processCodingAgentRuntime";
 import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
+import type { CreateOrReuseAdaPullRequest, CreateOrReuseAdaPullRequestOutcome } from "./adaPullRequest";
 import type { InvokeCodingAgent } from "./codingAgentInvocation";
 import type { EnsureAdaDeliveryBranch } from "./deliveryBranch";
 import type { EnsureAdaDeliveryCommit } from "./deliveryCommit";
@@ -30,6 +32,20 @@ export type RemoteDeliveryOutcome =
   | { status: "verified"; remoteBranch: string; remoteSha: string }
   | { status: "failed"; reason: string };
 
+type PullRequestFailureOutcome = Extract<CreateOrReuseAdaPullRequestOutcome, { ok: false }>;
+
+/**
+ * Absent (rather than a `"skipped"` variant) whenever no attempt was made — `remoteDelivery` is
+ * not `"verified"`, or no `createOrReuseAdaPullRequest` dependency was supplied. Present whenever
+ * an attempt was made, whether it succeeded or failed: a failure here never invalidates the
+ * already-durable `remoteDelivery`, so it is reported alongside it, not in place of it.
+ */
+export type PullRequestOutcome =
+  | { status: "created"; number: number; htmlUrl: string }
+  | { status: "existing"; number: number; htmlUrl: string }
+  | ({ status: "failed" } & Omit<PullRequestFailureOutcome, "ok">)
+  | { status: "failed"; reason: "pull_request_error" };
+
 export type ExecutorOutcome =
   | { ok: true; claimed: false }
   | { ok: true; claimed: true; workingTree: "clean" }
@@ -40,6 +56,7 @@ export type ExecutorOutcome =
       deliveryBranch: string;
       deliveryCommitSha: string;
       remoteDelivery: RemoteDeliveryOutcome;
+      pullRequest?: PullRequestOutcome;
     }
   | { ok: false; reason: string };
 
@@ -93,6 +110,15 @@ export interface RunExecutorParams {
    * branch/commit steps, a failure here does not fail the overall outcome — see `RemoteDeliveryOutcome`.
    */
   ensureAdaDeliveryPush: EnsureAdaDeliveryPush;
+  /**
+   * Creates or idempotently reuses the GitHub Pull Request for the verified ADA delivery branch,
+   * invoked only when `remoteDelivery.status === "verified"`, before cleanup. Optional, unlike the
+   * required delivery steps above: the already-durable remote delivery branch is a complete,
+   * valid outcome on its own (see `RemoteDeliveryOutcome`'s JSDoc), so omitting this dependency
+   * safely means "no PR attempt is made" rather than misrepresenting anything — mirroring
+   * `invokeCodingAgent`'s optional/no-default shape, not the required delivery steps'.
+   */
+  createOrReuseAdaPullRequest?: CreateOrReuseAdaPullRequest;
   /** Generates the id persisted with a winning claim. Defaults to `randomUUID`; overridable for tests. */
   claimIdFactory?: () => string;
 }
@@ -114,6 +140,7 @@ export async function runExecutor({
   ensureAdaDeliveryBranch,
   ensureAdaDeliveryCommit,
   ensureAdaDeliveryPush,
+  createOrReuseAdaPullRequest,
   claimIdFactory = randomUUID,
 }: RunExecutorParams): Promise<ExecutorOutcome> {
   let executionRunId: string;
@@ -342,6 +369,7 @@ export async function runExecutor({
     }
 
     let remoteDelivery: RemoteDeliveryOutcome;
+    let pullRequest: PullRequestOutcome | undefined;
     try {
       const deliveryPushOutcome = await ensureAdaDeliveryPush({
         workspacePath: workspaceOutcome.workspace.path,
@@ -361,6 +389,49 @@ export async function runExecutor({
           deliveryBranch: deliveryPushOutcome.remoteBranch,
           remoteSha: deliveryPushOutcome.remoteSha,
         });
+
+        if (createOrReuseAdaPullRequest) {
+          try {
+            const pullRequestOutcome = await createOrReuseAdaPullRequest({
+              repository: run.input.repository,
+              head: deliveryBranchOutcome.branchName,
+              base: run.input.baseBranch,
+              executionRequestId: run.executionRequestId,
+              deliveryCommitSha: deliveryCommitOutcome.commitSha,
+              title: buildAdaPullRequestTitle(run.input.title, run.executionRequestId),
+            });
+
+            if (pullRequestOutcome.ok) {
+              pullRequest = {
+                status: pullRequestOutcome.status,
+                number: pullRequestOutcome.number,
+                htmlUrl: pullRequestOutcome.htmlUrl,
+              };
+              logger.info("Created or reused the GitHub Pull Request for the verified ADA delivery branch.", {
+                ...safeIdentifiers,
+                pullRequestStatus: pullRequestOutcome.status,
+                pullRequestNumber: pullRequestOutcome.number,
+              });
+            } else {
+              const safePullRequestFields = {
+                reason: pullRequestOutcome.reason,
+                ...("credentialReason" in pullRequestOutcome ? { credentialReason: pullRequestOutcome.credentialReason } : {}),
+                ...("httpStatus" in pullRequestOutcome ? { httpStatus: pullRequestOutcome.httpStatus } : {}),
+              };
+              pullRequest = { status: "failed", ...safePullRequestFields };
+              logger.error("Failed to create or reuse the GitHub Pull Request; the verified remote delivery branch remains valid.", {
+                ...safeIdentifiers,
+                ...safePullRequestFields,
+              });
+            }
+          } catch {
+            pullRequest = { status: "failed", reason: "pull_request_error" };
+            logger.error(
+              "Unexpected failure creating or reusing the GitHub Pull Request; the verified remote delivery branch remains valid.",
+              safeIdentifiers,
+            );
+          }
+        }
       } else {
         remoteDelivery = { status: "failed", reason: deliveryPushOutcome.reason };
         logger.error("Failed to durably publish the ADA delivery branch; the local delivery commit remains valid.", {
@@ -389,6 +460,7 @@ export async function runExecutor({
       deliveryBranch: deliveryBranchOutcome.branchName,
       deliveryCommitSha: deliveryCommitOutcome.commitSha,
       remoteDeliveryStatus: remoteDelivery.status,
+      ...(pullRequest ? { pullRequestStatus: pullRequest.status } : {}),
     });
     return {
       ok: true,
@@ -397,6 +469,7 @@ export async function runExecutor({
       deliveryBranch: deliveryBranchOutcome.branchName,
       deliveryCommitSha: deliveryCommitOutcome.commitSha,
       remoteDelivery,
+      ...(pullRequest ? { pullRequest } : {}),
     };
   } finally {
     await workspaceOutcome.cleanup();

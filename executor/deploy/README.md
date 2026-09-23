@@ -140,9 +140,12 @@ process — see `codexProviderConfig.ts`'s explicit child-process env, which nev
 call it out explicitly before relying on the durable-push feature:**
 
 1. **Create a GitHub App** on `https://github.com/settings/apps/new` (or your org's equivalent),
-   scoped to the narrowest permission this feature needs: Repository permissions →
-   **Contents: Read and write**. No other repository or account permissions are required. Disable
-   webhooks (not used).
+   scoped to the narrowest permissions this feature needs: Repository permissions →
+   **Contents: Read and write**, plus **Pull requests: Read and write** (required for ADA to
+   create/reuse the delivery Pull Request after a verified push — see "Automatic Pull Request
+   creation" below; **not yet granted on the live App as of this writing**, since granting it is a
+   separate, explicit operational step, not something this codebase change performs). No other
+   repository or account permissions are required. Disable webhooks (not used).
 2. **Install the App** on exactly the `johnpwise/kanban-app` repository (not "all repositories").
    Note the **App ID** (shown on the App's settings page) and the **Installation ID** (the numeric
    ID in the URL after installing, e.g. `https://github.com/settings/installations/<id>`).
@@ -164,11 +167,28 @@ call it out explicitly before relying on the durable-push feature:**
    Then re-run `bash executor/deploy/deploy.sh deploy-job` to apply them to the Job.
 
 **IAM/external-permission call-out:** this grants a new GitHub App **write** access
-(Contents: Read and write) to `johnpwise/kanban-app` — the first GitHub write credential this
-executor has ever held. It is repository-scoped (this one repo only) and Contents-only (no
-Administration, Actions, Pull requests, or other permission). No GCP IAM role changes are required
-beyond the same per-secret `roles/secretmanager.secretAccessor` pattern already used for
-`CODEX_API_KEY`.
+(Contents: Read and write, plus Pull requests: Read and write for PR creation — see below) to
+`johnpwise/kanban-app` — the first GitHub write credential this executor has ever held. It is
+repository-scoped (this one repo only) and limited to these two permissions (no Administration,
+Actions, or other permission). No GCP IAM role changes are required beyond the same per-secret
+`roles/secretmanager.secretAccessor` pattern already used for `CODEX_API_KEY`.
+
+### Automatic Pull Request creation
+
+Once remote delivery is verified, ADA creates (or idempotently reuses) a GitHub Pull Request from
+the verified delivery branch into the immutable requested base branch
+(`executor/src/adaPullRequest.ts`), using the same installation token minted for the push above —
+no second credential or auth path. This call requires the App to additionally hold
+**Pull requests: Read and write**; **Contents: Read and write alone is not sufficient** for
+`POST /repos/{owner}/{repo}/pulls`.
+
+**As of this writing, the live GitHub App has not been granted this permission** — granting it,
+and validating live PR creation, is a deliberate, separate operational step (see
+`.agent-workflows/ada-github-pr-creation/` for the slice that introduced this capability). Until
+that permission is granted, `createOrReuseAdaPullRequest` fails safely with a typed
+`credential_unavailable` / `create_failed` outcome (`pullRequest.status: "failed"`); the already
+durably published, independently verified delivery branch and commit remain valid and unaffected —
+PR-creation failure never touches, resets, or force-pushes the delivery branch.
 
 - **`setup` creates the Secret Manager secret container only, with no version** — same pattern as
   `ada-codex-api-key`.
@@ -249,3 +269,8 @@ untouched.
   work still produces a verified local delivery commit, but the durable remote-publish step fails
   safely (`remoteDelivery: {status: "failed", reason: "credential_unavailable"}`) rather than
   blocking the rest of the execution
+- The App additionally holding **Pull requests: Read and write** — see "Automatic Pull Request
+  creation" above; not yet granted on the live App as of this writing. Without it, remote delivery
+  still succeeds and verifies normally, but Pull Request creation fails safely
+  (`pullRequest: {status: "failed", reason: "credential_unavailable" | "create_failed", ...}`)
+  rather than blocking the rest of the execution or touching the delivery branch

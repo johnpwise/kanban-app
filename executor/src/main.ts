@@ -1,3 +1,4 @@
+import { createOrReuseAdaPullRequest } from "./adaPullRequest";
 import { parseCodexProviderConfig } from "./codexProviderConfig";
 import { ensureAdaDeliveryBranch } from "./deliveryBranch";
 import { ensureAdaDeliveryCommit } from "./deliveryCommit";
@@ -65,6 +66,8 @@ async function main(): Promise<void> {
     ensureAdaDeliveryCommit: (request) => ensureAdaDeliveryCommit({ ...request, runGit }),
     ensureAdaDeliveryPush: (request) =>
       ensureAdaDeliveryPush({ ...request, env: process.env, runGit, mintCredential: mintDeliveryCredential }),
+    createOrReuseAdaPullRequest: (request) =>
+      createOrReuseAdaPullRequest({ ...request, fetchImpl: fetch, mintCredential: mintDeliveryCredential }),
   });
   process.exit(exitCodeForOutcome(outcome));
 }
