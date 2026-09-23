@@ -7,6 +7,7 @@ import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
 import type { InvokeCodingAgent } from "./codingAgentInvocation";
 import type { EnsureAdaDeliveryBranch } from "./deliveryBranch";
+import type { EnsureAdaDeliveryCommit } from "./deliveryCommit";
 import type { ExecutionRunRepository } from "./executionRunRepository";
 import type { VerifyGitIntegrity } from "./gitIntegrityVerification";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
@@ -20,7 +21,13 @@ export interface ExecutorLogger {
 export type ExecutorOutcome =
   | { ok: true; claimed: false }
   | { ok: true; claimed: true; workingTree: "clean" }
-  | { ok: true; claimed: true; workingTree: "changes_detected"; deliveryBranch: string }
+  | {
+      ok: true;
+      claimed: true;
+      workingTree: "changes_detected";
+      deliveryBranch: string;
+      deliveryCommitSha: string;
+    }
   | { ok: false; reason: string };
 
 export interface RunExecutorParams {
@@ -57,6 +64,14 @@ export interface RunExecutorParams {
    * reporting a delivery branch without creating one would misrepresent the outcome.
    */
   ensureAdaDeliveryBranch: EnsureAdaDeliveryBranch;
+  /**
+   * Stages the coding-agent working-tree delta, creates the single ADA-owned local commit, and
+   * verifies its resulting history/branch/parent, invoked only after the ADA delivery branch is
+   * created and verified, before cleanup. Required, like `ensureAdaDeliveryBranch`: there is no
+   * safe default, since silently reporting a delivery commit without creating one would
+   * misrepresent the outcome.
+   */
+  ensureAdaDeliveryCommit: EnsureAdaDeliveryCommit;
   /** Generates the id persisted with a winning claim. Defaults to `randomUUID`; overridable for tests. */
   claimIdFactory?: () => string;
 }
@@ -76,6 +91,7 @@ export async function runExecutor({
   verifyGitIntegrity,
   inspectWorkingTree,
   ensureAdaDeliveryBranch,
+  ensureAdaDeliveryCommit,
   claimIdFactory = randomUUID,
 }: RunExecutorParams): Promise<ExecutorOutcome> {
   let executionRunId: string;
@@ -268,13 +284,55 @@ export async function runExecutor({
       return { ok: false, reason: `delivery_branch_${deliveryBranchOutcome.reason}` };
     }
 
+    let deliveryCommitOutcome;
+    try {
+      deliveryCommitOutcome = await ensureAdaDeliveryCommit({
+        workspacePath: workspaceOutcome.workspace.path,
+        executionRequestId: run.executionRequestId,
+        expectedBranch: deliveryBranchOutcome.branchName,
+        expectedParentSha: headSha,
+      });
+    } catch {
+      logger.error("Unexpected failure creating the ADA delivery commit.", safeIdentifiers);
+      return { ok: false, reason: "delivery_commit_error" };
+    }
+
+    if (!deliveryCommitOutcome.ok) {
+      logger.error("Failed to create the ADA delivery commit.", {
+        ...safeIdentifiers,
+        reason: deliveryCommitOutcome.reason,
+        ...("gitErrorCode" in deliveryCommitOutcome ? { gitErrorCode: deliveryCommitOutcome.gitErrorCode } : {}),
+        ...("expectedBranch" in deliveryCommitOutcome
+          ? { expectedBranch: deliveryCommitOutcome.expectedBranch, actualBranch: deliveryCommitOutcome.actualBranch }
+          : {}),
+        ...("expectedParentSha" in deliveryCommitOutcome
+          ? {
+              expectedParentSha: deliveryCommitOutcome.expectedParentSha,
+              actualParentSha: deliveryCommitOutcome.actualParentSha,
+            }
+          : {}),
+        ...("expectedCommitSha" in deliveryCommitOutcome
+          ? { expectedCommitSha: deliveryCommitOutcome.expectedCommitSha, actualHeadSha: deliveryCommitOutcome.actualHeadSha }
+          : {}),
+        ...("stage" in deliveryCommitOutcome ? { stage: deliveryCommitOutcome.stage } : {}),
+      });
+      return { ok: false, reason: `delivery_commit_${deliveryCommitOutcome.reason}` };
+    }
+
     logger.info("Accepted execution run loaded and validated successfully.", {
       ...safeIdentifiers,
       headSha,
       workingTree: "changes_detected",
       deliveryBranch: deliveryBranchOutcome.branchName,
+      deliveryCommitSha: deliveryCommitOutcome.commitSha,
     });
-    return { ok: true, claimed: true, workingTree: "changes_detected", deliveryBranch: deliveryBranchOutcome.branchName };
+    return {
+      ok: true,
+      claimed: true,
+      workingTree: "changes_detected",
+      deliveryBranch: deliveryBranchOutcome.branchName,
+      deliveryCommitSha: deliveryCommitOutcome.commitSha,
+    };
   } finally {
     await workspaceOutcome.cleanup();
   }
