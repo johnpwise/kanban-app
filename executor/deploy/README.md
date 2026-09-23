@@ -25,8 +25,10 @@ project ADA history for that boundary.
     `latest`).
   - `deploy-job` — create or update the Cloud Run Job definition to point at the most recently
     built image. **Does not set `ADA_EXECUTION_RUN_ID`** — the Job's persistent definition never
-    carries an execution-specific value. Wires `CODEX_API_KEY` from Secret Manager via
-    `--set-secrets` — see "Codex CLI authentication" below.
+    carries an execution-specific value. Wires `CODEX_API_KEY` and `ADA_GITHUB_APP_PRIVATE_KEY`
+    from Secret Manager via `--set-secrets` — see "Codex CLI authentication" and "GitHub App
+    delivery credential" below. Also sets the non-secret `ADA_GITHUB_APP_ID` /
+    `ADA_GITHUB_APP_INSTALLATION_ID` env vars when configured.
   - `execute <executionRunId>` — run the Job once, supplying `ADA_EXECUTION_RUN_ID` as a
     per-execution override (`--update-env-vars` on `gcloud run jobs execute`). Confirmed live
     (`.agent-workflows/ada-executor-repository-checkout-live-validation/step-009.md`): this
@@ -64,7 +66,9 @@ footprint grows enough to need drift detection or multi-environment state.
 | IAM binding | `roles/artifactregistry.writer` for `<project-number>@cloudbuild.gserviceaccount.com`, scoped to the `ada-executor` repo only (not project-wide) | needed only because local Docker is unavailable in the environment this was built in, so `build` falls back to Cloud Build, which needs write access to push the image |
 | Secret Manager secret | `ada-codex-api-key` (configurable via `ADA_CODEX_API_KEY_SECRET`) | created **empty** — `setup` never sets a version; see "Codex CLI authentication" below |
 | IAM binding | `roles/secretmanager.secretAccessor` on the above secret, scoped to that one secret only (not project-wide) | granted to the runtime SA so the Job can resolve `CODEX_API_KEY` at container start |
-| Cloud Run Job | `ada-executor` | region `europe-west2`, 1 task, `max-retries=0`, runtime SA above, no persistent `ADA_EXECUTION_RUN_ID`, `CODEX_API_KEY` sourced from the Secret Manager secret above via `--set-secrets` |
+| Secret Manager secret | `ada-github-app-private-key` (configurable via `ADA_GITHUB_APP_PRIVATE_KEY_SECRET`) | created **empty** — `setup` never sets a version; see "GitHub App delivery credential" below |
+| IAM binding | `roles/secretmanager.secretAccessor` on the above secret, scoped to that one secret only (not project-wide) | granted to the runtime SA so the Job can resolve `ADA_GITHUB_APP_PRIVATE_KEY` at container start |
+| Cloud Run Job | `ada-executor` | region `europe-west2`, 1 task, `max-retries=0`, runtime SA above, no persistent `ADA_EXECUTION_RUN_ID`, `CODEX_API_KEY` and `ADA_GITHUB_APP_PRIVATE_KEY` sourced from their Secret Manager secrets via `--set-secrets`, `ADA_GITHUB_APP_ID`/`ADA_GITHUB_APP_INSTALLATION_ID` set as plain env vars only once configured |
 
 No other roles are granted to the runtime service account. It cannot call other GCP APIs beyond
 Firestore, and has no Cloud Run/IAM/Artifact Registry permissions on itself. Cloud Build's own
@@ -123,6 +127,67 @@ credentials to disk and is wrong for a one-shot Cloud Run Job container).
   remains readable until explicitly destroyed — see `gcloud secrets versions destroy` if rotation
   requires revoking the old value.
 
+## GitHub App delivery credential
+
+ADA publishes the verified local delivery commit to `refs/heads/ada/<executionRequestId>` on
+GitHub using a **GitHub App installation access token** — short-lived (~1 hour), minted by the
+executor itself from the App's private key, scoped only to the repositories the App is installed
+on (`executor/src/githubAppCredential.ts`). This credential is isolated from the Codex coding-agent
+process — see `codexProviderConfig.ts`'s explicit child-process env, which never includes any
+`ADA_GITHUB_APP_*` variable.
+
+**This requires one manual, external, one-time setup step this script cannot perform for you —
+call it out explicitly before relying on the durable-push feature:**
+
+1. **Create a GitHub App** on `https://github.com/settings/apps/new` (or your org's equivalent),
+   scoped to the narrowest permission this feature needs: Repository permissions →
+   **Contents: Read and write**. No other repository or account permissions are required. Disable
+   webhooks (not used).
+2. **Install the App** on exactly the `johnpwise/kanban-app` repository (not "all repositories").
+   Note the **App ID** (shown on the App's settings page) and the **Installation ID** (the numeric
+   ID in the URL after installing, e.g. `https://github.com/settings/installations/<id>`).
+3. **Generate a private key** for the App (same settings page → "Generate a private key") — this
+   downloads a `.pem` file. Treat it exactly like the Codex API key: never commit it, never print
+   it, never paste it into a task/execution document.
+4. **Add the private key to Secret Manager** (the secret container is created empty by `setup`;
+   this step adds the real value, piped in so it never touches shell history or the process list):
+   ```sh
+   gcloud secrets versions add ada-github-app-private-key \
+     --project=kanban-app-fa4b7 --data-file=/path/to/downloaded-key.pem
+   ```
+5. **Set the two non-secret identifiers** in your `config.env` (or exported environment) before the
+   next `deploy-job`:
+   ```sh
+   ADA_GITHUB_APP_ID=<app id from step 2>
+   ADA_GITHUB_APP_INSTALLATION_ID=<installation id from step 2>
+   ```
+   Then re-run `bash executor/deploy/deploy.sh deploy-job` to apply them to the Job.
+
+**IAM/external-permission call-out:** this grants a new GitHub App **write** access
+(Contents: Read and write) to `johnpwise/kanban-app` — the first GitHub write credential this
+executor has ever held. It is repository-scoped (this one repo only) and Contents-only (no
+Administration, Actions, Pull requests, or other permission). No GCP IAM role changes are required
+beyond the same per-secret `roles/secretmanager.secretAccessor` pattern already used for
+`CODEX_API_KEY`.
+
+- **`setup` creates the Secret Manager secret container only, with no version** — same pattern as
+  `ada-codex-api-key`.
+- **`deploy-job` wires the private key at container start**, via
+  `--set-secrets="...,ADA_GITHUB_APP_PRIVATE_KEY=ada-github-app-private-key:latest"` — never baked
+  into the image, never in the Job's plain env-var config.
+- **`ADA_GITHUB_APP_ID` / `ADA_GITHUB_APP_INSTALLATION_ID` are ordinary (non-secret) env vars**,
+  set via `--set-env-vars` only when both are present in config — omitted entirely otherwise, so
+  routine deploys are never blocked on this feature being configured.
+- **Never print, persist, echo, or expose `ADA_GITHUB_APP_PRIVATE_KEY`** or the tokens minted from
+  it. `githubAppCredential.ts` never logs the private key, the signed JWT, or the minted
+  installation token; push failures surface only safe fields (a reason code and, where applicable,
+  an HTTP status).
+- Rotating the key: generate a new private key from the App's settings page, add it as a new secret
+  version, and (optionally) delete the old key from GitHub's App settings once confirmed working —
+  no `deploy-job` re-run required, same as Codex key rotation.
+- Revoking access entirely: uninstall the App from the repository, or delete the App outright — the
+  executor's next mint attempt then fails safely (a typed `token_exchange_failed` outcome).
+
 ## Region
 
 `europe-west2`, matching this project's existing Firestore location (confirmed via
@@ -179,3 +244,8 @@ untouched.
 - A real Codex API key, added manually as a Secret Manager secret version — see "Codex CLI
   authentication" above; `setup` does not create or require this to complete successfully, but
   `execute` will fail without it once the Job actually reaches the coding-agent invocation step
+- A GitHub App created, installed on `johnpwise/kanban-app`, and its private key added manually as
+  a Secret Manager secret version — see "GitHub App delivery credential" above; without it, changed
+  work still produces a verified local delivery commit, but the durable remote-publish step fails
+  safely (`remoteDelivery: {status: "failed", reason: "credential_unavailable"}`) rather than
+  blocking the rest of the execution

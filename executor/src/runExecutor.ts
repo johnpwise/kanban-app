@@ -8,6 +8,7 @@ import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 import type { InvokeCodingAgent } from "./codingAgentInvocation";
 import type { EnsureAdaDeliveryBranch } from "./deliveryBranch";
 import type { EnsureAdaDeliveryCommit } from "./deliveryCommit";
+import type { EnsureAdaDeliveryPush } from "./deliveryPush";
 import type { ExecutionRunRepository } from "./executionRunRepository";
 import type { VerifyGitIntegrity } from "./gitIntegrityVerification";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
@@ -18,6 +19,17 @@ export interface ExecutorLogger {
   error(message: string, fields?: Record<string, unknown>): void;
 }
 
+/**
+ * Distinguishes "the local ADA delivery commit was created" (always true once `changes_detected`
+ * is reached) from "that commit was durably published to GitHub and independently verified". A
+ * push/verification failure never turns the overall outcome into `ok: false`: the local commit is
+ * still valid, so this is reported as a `status: "failed"` remote-delivery result, not an
+ * executor-level failure.
+ */
+export type RemoteDeliveryOutcome =
+  | { status: "verified"; remoteBranch: string; remoteSha: string }
+  | { status: "failed"; reason: string };
+
 export type ExecutorOutcome =
   | { ok: true; claimed: false }
   | { ok: true; claimed: true; workingTree: "clean" }
@@ -27,6 +39,7 @@ export type ExecutorOutcome =
       workingTree: "changes_detected";
       deliveryBranch: string;
       deliveryCommitSha: string;
+      remoteDelivery: RemoteDeliveryOutcome;
     }
   | { ok: false; reason: string };
 
@@ -72,6 +85,14 @@ export interface RunExecutorParams {
    * misrepresent the outcome.
    */
   ensureAdaDeliveryCommit: EnsureAdaDeliveryCommit;
+  /**
+   * Publishes the verified local ADA delivery commit to GitHub and independently verifies it,
+   * invoked only after the local delivery commit is created and verified, before cleanup.
+   * Required, like `ensureAdaDeliveryCommit`: there is no safe default, since silently reporting a
+   * verified remote branch without publishing one would misrepresent the outcome. Unlike the
+   * branch/commit steps, a failure here does not fail the overall outcome — see `RemoteDeliveryOutcome`.
+   */
+  ensureAdaDeliveryPush: EnsureAdaDeliveryPush;
   /** Generates the id persisted with a winning claim. Defaults to `randomUUID`; overridable for tests. */
   claimIdFactory?: () => string;
 }
@@ -92,6 +113,7 @@ export async function runExecutor({
   inspectWorkingTree,
   ensureAdaDeliveryBranch,
   ensureAdaDeliveryCommit,
+  ensureAdaDeliveryPush,
   claimIdFactory = randomUUID,
 }: RunExecutorParams): Promise<ExecutorOutcome> {
   let executionRunId: string;
@@ -319,12 +341,54 @@ export async function runExecutor({
       return { ok: false, reason: `delivery_commit_${deliveryCommitOutcome.reason}` };
     }
 
+    let remoteDelivery: RemoteDeliveryOutcome;
+    try {
+      const deliveryPushOutcome = await ensureAdaDeliveryPush({
+        workspacePath: workspaceOutcome.workspace.path,
+        repository: run.input.repository,
+        deliveryBranch: deliveryBranchOutcome.branchName,
+        deliveryCommitSha: deliveryCommitOutcome.commitSha,
+      });
+
+      if (deliveryPushOutcome.ok) {
+        remoteDelivery = {
+          status: "verified",
+          remoteBranch: deliveryPushOutcome.remoteBranch,
+          remoteSha: deliveryPushOutcome.remoteSha,
+        };
+        logger.info("Published and independently verified the ADA delivery branch.", {
+          ...safeIdentifiers,
+          deliveryBranch: deliveryPushOutcome.remoteBranch,
+          remoteSha: deliveryPushOutcome.remoteSha,
+        });
+      } else {
+        remoteDelivery = { status: "failed", reason: deliveryPushOutcome.reason };
+        logger.error("Failed to durably publish the ADA delivery branch; the local delivery commit remains valid.", {
+          ...safeIdentifiers,
+          reason: deliveryPushOutcome.reason,
+          ...("gitErrorCode" in deliveryPushOutcome ? { gitErrorCode: deliveryPushOutcome.gitErrorCode } : {}),
+          ...("credentialReason" in deliveryPushOutcome ? { credentialReason: deliveryPushOutcome.credentialReason } : {}),
+          ...("httpStatus" in deliveryPushOutcome ? { httpStatus: deliveryPushOutcome.httpStatus } : {}),
+          ...("expectedSha" in deliveryPushOutcome
+            ? { expectedSha: deliveryPushOutcome.expectedSha, actualSha: deliveryPushOutcome.actualSha }
+            : {}),
+        });
+      }
+    } catch {
+      remoteDelivery = { status: "failed", reason: "delivery_push_error" };
+      logger.error(
+        "Unexpected failure publishing the ADA delivery branch; the local delivery commit remains valid.",
+        safeIdentifiers,
+      );
+    }
+
     logger.info("Accepted execution run loaded and validated successfully.", {
       ...safeIdentifiers,
       headSha,
       workingTree: "changes_detected",
       deliveryBranch: deliveryBranchOutcome.branchName,
       deliveryCommitSha: deliveryCommitOutcome.commitSha,
+      remoteDeliveryStatus: remoteDelivery.status,
     });
     return {
       ok: true,
@@ -332,6 +396,7 @@ export async function runExecutor({
       workingTree: "changes_detected",
       deliveryBranch: deliveryBranchOutcome.branchName,
       deliveryCommitSha: deliveryCommitOutcome.commitSha,
+      remoteDelivery,
     };
   } finally {
     await workspaceOutcome.cleanup();
