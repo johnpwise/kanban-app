@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ProcessCodingAgentRuntimeError } from "./processCodingAgentRuntime";
 import { runExecutor } from "./runExecutor";
 import { createFakeEnsureAdaDeliveryBranch } from "./testHelpers/fakeEnsureAdaDeliveryBranch";
+import { createFakeEnsureAdaDeliveryCommit } from "./testHelpers/fakeEnsureAdaDeliveryCommit";
 import { createFakeExecutionRunRepository } from "./testHelpers/fakeExecutionRunRepository";
 import { createFakeInspectWorkingTree } from "./testHelpers/fakeInspectWorkingTree";
 import { createFakeLogger } from "./testHelpers/fakeLogger";
@@ -46,6 +47,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -59,6 +61,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -70,6 +73,7 @@ describe("runExecutor", () => {
     const { repository, claimCalls } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -83,6 +87,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
       claimIdFactory: () => "claim-1",
     });
 
@@ -98,6 +103,7 @@ describe("runExecutor", () => {
     });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, calls } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -111,6 +117,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -126,12 +133,13 @@ describe("runExecutor", () => {
     });
     const { logger, calls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     const infoCall = calls.find((call) => call.level === "info");
@@ -150,12 +158,13 @@ describe("runExecutor", () => {
     const { repository, claimCalls } = createFakeExecutionRunRepository({ data: undefined });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(claimCalls).toEqual([]);
@@ -169,6 +178,7 @@ describe("runExecutor", () => {
     });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, calls } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -182,6 +192,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -194,12 +205,13 @@ describe("runExecutor", () => {
     const { repository, calls } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(calls).toEqual([{ executionRunId: "req-1" }]);
@@ -210,12 +222,13 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    const outcome = await runExecutor({ env: {}, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    const outcome = await runExecutor({ env: {}, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(outcome.ok).toBe(false);
@@ -226,6 +239,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: undefined });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -239,6 +253,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -250,6 +265,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: { not: "valid" } });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -263,6 +279,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -275,6 +292,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -288,6 +306,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -299,6 +318,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ throwError: new Error("unavailable") });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -312,6 +332,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -323,6 +344,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
@@ -330,7 +352,7 @@ describe("runExecutor", () => {
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     const successCall = calls.find((call) => call.level === "info");
@@ -348,12 +370,13 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
@@ -366,12 +389,13 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: { ...data, status: "unknown" } });
     const { logger, calls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
@@ -383,12 +407,13 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, calls } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(calls).toEqual([{ repository: "johnpwise/kanban-app", baseBranch: "develop" }]);
@@ -399,12 +424,13 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(cleanupCallCount()).toBe(1);
@@ -415,6 +441,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "clone_failed" });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -428,6 +455,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -439,6 +467,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
       throwError: new Error("unexpected"),
     });
@@ -454,6 +483,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -465,12 +495,13 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "checkout_failed" });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
@@ -482,6 +513,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
       reason: "clone_failed",
       gitErrorCode: 128,
@@ -490,7 +522,7 @@ describe("runExecutor", () => {
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     const errorCall = calls.find(
@@ -504,6 +536,7 @@ describe("runExecutor", () => {
     const { repository, recordSourceRevisionCalls } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
@@ -519,6 +552,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -533,12 +567,13 @@ describe("runExecutor", () => {
     const { repository, recordSourceRevisionCalls } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "clone_failed" });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(recordSourceRevisionCalls).toEqual([]);
@@ -552,12 +587,13 @@ describe("runExecutor", () => {
     });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(recordSourceRevisionCalls).toEqual([]);
@@ -571,12 +607,13 @@ describe("runExecutor", () => {
     });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(cleanupCallCount()).toBe(1);
@@ -590,6 +627,7 @@ describe("runExecutor", () => {
     });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -603,6 +641,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -617,6 +656,7 @@ describe("runExecutor", () => {
     });
     const { logger, calls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
@@ -624,7 +664,7 @@ describe("runExecutor", () => {
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     const errorCall = calls.find(
@@ -644,6 +684,7 @@ describe("runExecutor", () => {
     });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -657,6 +698,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -671,6 +713,7 @@ describe("runExecutor", () => {
     });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -684,6 +727,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -698,6 +742,7 @@ describe("runExecutor", () => {
     });
     const { logger, calls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
@@ -705,7 +750,7 @@ describe("runExecutor", () => {
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     const errorCall = calls.find(
@@ -727,12 +772,13 @@ describe("runExecutor", () => {
     });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(cleanupCallCount()).toBe(1);
@@ -743,6 +789,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace({
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
@@ -764,6 +811,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
       invokeCodingAgent,
     });
 
@@ -783,6 +831,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -797,6 +846,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
       invokeCodingAgent,
     });
 
@@ -809,6 +859,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls: logCalls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -825,6 +876,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
       invokeCodingAgent,
     });
 
@@ -839,6 +891,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls: logCalls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -855,6 +908,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
       invokeCodingAgent,
     });
 
@@ -871,6 +925,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace({ reason: "clone_failed" });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -885,6 +940,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
       invokeCodingAgent,
     });
 
@@ -900,6 +956,7 @@ describe("runExecutor", () => {
     });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -914,6 +971,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
       invokeCodingAgent,
     });
 
@@ -929,12 +987,13 @@ describe("runExecutor", () => {
     });
     const { logger, calls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
 
     // Act
-    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch });
+    await runExecutor({ env: { ADA_EXECUTION_RUN_ID: "req-1" }, repository, logger, materializeRepositoryWorkspace, inspectWorkingTree, verifyGitIntegrity, ensureAdaDeliveryBranch, ensureAdaDeliveryCommit });
 
     // Assert
     expect(serializedLogs(calls)).not.toContain(PROMPT);
@@ -946,6 +1005,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace({
       headSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     });
@@ -968,6 +1028,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -986,6 +1047,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { invokeCodingAgent } = createFakeInvokeCodingAgent({ throwError: new Error("unsafe detail") });
     const { inspectWorkingTree } = createFakeInspectWorkingTree();
@@ -1001,6 +1063,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1012,6 +1075,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls: logCalls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace({
       headSha: "a".repeat(40),
     });
@@ -1031,6 +1095,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1046,6 +1111,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls: logCalls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree, calls: workingTreeCalls } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity({
@@ -1063,6 +1129,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1078,6 +1145,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls: logCalls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree, calls: workingTreeCalls } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity({
@@ -1095,6 +1163,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1110,6 +1179,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls: logCalls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree, calls: workingTreeCalls } = createFakeInspectWorkingTree();
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity({
@@ -1125,6 +1195,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1140,6 +1211,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const wrappedMaterialize: typeof materializeRepositoryWorkspace = async (request) => {
       const outcome = await materializeRepositoryWorkspace(request);
@@ -1172,6 +1244,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1184,6 +1257,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const wrappedMaterialize: typeof materializeRepositoryWorkspace = async (request) => {
       const outcome = await materializeRepositoryWorkspace(request);
@@ -1216,6 +1290,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1227,6 +1302,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { invokeCodingAgent } = createFakeInvokeCodingAgent();
     let cleanupCallCountAtInspection = -1;
@@ -1247,6 +1323,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1260,6 +1337,7 @@ describe("runExecutor", () => {
     const { repository, recordSourceRevisionCalls } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const wrappedMaterialize: typeof materializeRepositoryWorkspace = async (request) => {
       const outcome = await materializeRepositoryWorkspace(request);
@@ -1289,6 +1367,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1301,6 +1380,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { invokeCodingAgent } = createFakeInvokeCodingAgent({ throwError: new Error("unsafe detail") });
     const { inspectWorkingTree, calls } = createFakeInspectWorkingTree();
@@ -1316,6 +1396,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1327,6 +1408,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "clean" });
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -1340,6 +1422,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1351,6 +1434,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -1364,10 +1448,17 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: true, claimed: true, workingTree: "changes_detected", deliveryBranch: "ada/req-1" });
+    expect(outcome).toEqual({
+      ok: true,
+      claimed: true,
+      workingTree: "changes_detected",
+      deliveryBranch: "ada/req-1",
+      deliveryCommitSha: "c".repeat(40),
+    });
   });
 
   it("cleans up the workspace exactly once, and returns a safe failure outcome, when working-tree inspection reports a structured failure", async () => {
@@ -1375,6 +1466,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls: logCalls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree({ reason: "status_failed", gitErrorCode: 128 });
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -1388,6 +1480,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1402,6 +1495,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger, calls: logCalls } = createFakeLogger();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree({
       throwError: new Error("unsafe inspection failure detail"),
@@ -1417,6 +1511,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1430,6 +1525,7 @@ describe("runExecutor", () => {
     const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
     const { logger } = createFakeLogger();
     const { ensureAdaDeliveryBranch, calls } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
     const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
     const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "clean" });
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
@@ -1443,6 +1539,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1463,6 +1560,7 @@ describe("runExecutor", () => {
         cleanupCallCountAtInvocation = cleanupCallCount();
       },
     });
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
 
     // Act
     await runExecutor({
@@ -1473,6 +1571,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1509,6 +1608,7 @@ describe("runExecutor", () => {
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({
       onCall: () => events.push("ensure_delivery_branch"),
     });
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
 
     // Act
     await runExecutor({
@@ -1520,6 +1620,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1541,6 +1642,7 @@ describe("runExecutor", () => {
     const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ branchName: "ada/req-1" });
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
 
     // Act
     const outcome = await runExecutor({
@@ -1551,10 +1653,17 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
-    expect(outcome).toEqual({ ok: true, claimed: true, workingTree: "changes_detected", deliveryBranch: "ada/req-1" });
+    expect(outcome).toEqual({
+      ok: true,
+      claimed: true,
+      workingTree: "changes_detected",
+      deliveryBranch: "ada/req-1",
+      deliveryCommitSha: "c".repeat(40),
+    });
   });
 
   it("cleans up the workspace exactly once, and returns a safe deterministic failure outcome, when the derived branch name is invalid", async () => {
@@ -1568,6 +1677,7 @@ describe("runExecutor", () => {
       reason: "invalid_branch_name",
       gitErrorCode: 1,
     });
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
 
     // Act
     const outcome = await runExecutor({
@@ -1578,6 +1688,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1600,6 +1711,7 @@ describe("runExecutor", () => {
       reason: "branch_creation_failed",
       gitErrorCode: 128,
     });
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
 
     // Act
     const outcome = await runExecutor({
@@ -1610,6 +1722,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1633,6 +1746,7 @@ describe("runExecutor", () => {
       expectedBranch: "ada/req-1",
       actualBranch: "coding-agent-branch",
     });
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
 
     // Act
     const outcome = await runExecutor({
@@ -1643,6 +1757,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1664,6 +1779,7 @@ describe("runExecutor", () => {
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({
       throwError: new Error("unsafe delivery-branch failure detail"),
     });
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
 
     // Act
     const outcome = await runExecutor({
@@ -1674,6 +1790,7 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert
@@ -1690,6 +1807,7 @@ describe("runExecutor", () => {
     const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
     const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
     const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ reason: "branch_creation_failed" });
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
 
     // Act
     await runExecutor({
@@ -1700,6 +1818,335 @@ describe("runExecutor", () => {
       inspectWorkingTree,
       verifyGitIntegrity,
       ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
+    });
+
+    // Assert
+    expect(serializedLogs(logCalls)).not.toContain(PROMPT);
+    expect(serializedLogs(logCalls)).not.toContain(TITLE);
+  });
+
+  it("creates the ADA delivery commit from the still-live workspace, the verified delivery branch, and the persisted sourceRevision.headSha, after branch verification, before cleanup", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace({
+      headSha: "a".repeat(40),
+    });
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+    const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ branchName: "ada/req-1" });
+    let cleanupCallCountAtInvocation = -1;
+    const { ensureAdaDeliveryCommit, calls } = createFakeEnsureAdaDeliveryCommit({
+      onCall: () => {
+        cleanupCallCountAtInvocation = cleanupCallCount();
+      },
+    });
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+      ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
+    });
+
+    // Assert
+    expect(calls).toEqual([
+      {
+        workspacePath: "/tmp/fake-workspace",
+        executionRequestId: "req-1",
+        expectedBranch: "ada/req-1",
+        expectedParentSha: "a".repeat(40),
+      },
+    ]);
+    expect(cleanupCallCountAtInvocation).toBe(0);
+  });
+
+  it("does not create an ADA delivery commit for a clean working tree", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "clean" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+    const { ensureAdaDeliveryCommit, calls } = createFakeEnsureAdaDeliveryCommit();
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+      ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: true, claimed: true, workingTree: "clean" });
+    expect(calls).toEqual([]);
+  });
+
+  it("does not attempt the ADA delivery commit when ADA delivery branch creation fails", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+    const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ reason: "branch_creation_failed" });
+    const { ensureAdaDeliveryCommit, calls } = createFakeEnsureAdaDeliveryCommit();
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+      ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "delivery_branch_branch_creation_failed" });
+    expect(calls).toEqual([]);
+  });
+
+  it("proves the ordering: ADA delivery branch created -> ADA delivery commit created -> cleanup", async () => {
+    // Arrange
+    const events: string[] = [];
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+    const wrappedMaterialize: typeof materializeRepositoryWorkspace = async (request) => {
+      const outcome = await materializeRepositoryWorkspace(request);
+      if (outcome.ok) {
+        const cleanup = outcome.cleanup;
+        return {
+          ...outcome,
+          cleanup: async () => {
+            events.push("cleanup");
+            await cleanup();
+          },
+        };
+      }
+      return outcome;
+    };
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+    const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({
+      onCall: () => events.push("ensure_delivery_branch"),
+    });
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({
+      onCall: () => events.push("ensure_delivery_commit"),
+    });
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace: wrappedMaterialize,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+      ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
+    });
+
+    // Assert
+    expect(events).toEqual(["ensure_delivery_branch", "ensure_delivery_commit", "cleanup"]);
+  });
+
+  it("exposes the resulting delivery-commit SHA on a successful changed-tree outcome", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+    const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ branchName: "ada/req-1" });
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({ commitSha: "d".repeat(40) });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+      ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
+    });
+
+    // Assert
+    expect(outcome).toEqual({
+      ok: true,
+      claimed: true,
+      workingTree: "changes_detected",
+      deliveryBranch: "ada/req-1",
+      deliveryCommitSha: "d".repeat(40),
+    });
+  });
+
+  it("cleans up the workspace exactly once, and returns a safe deterministic failure outcome, when staging the delivery commit fails", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls: logCalls } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+    const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({
+      reason: "staging_failed",
+      gitErrorCode: 128,
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+      ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "delivery_commit_staging_failed" });
+    expect(cleanupCallCount()).toBe(1);
+    const errorCall = logCalls.find(
+      (call) => call.level === "error" && call.message === "Failed to create the ADA delivery commit.",
+    );
+    expect(errorCall?.fields).toMatchObject({ reason: "staging_failed", gitErrorCode: 128 });
+  });
+
+  it("cleans up the workspace exactly once, and returns a safe deterministic failure outcome, when the commit itself fails", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+    const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({
+      reason: "commit_failed",
+      gitErrorCode: 1,
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+      ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "delivery_commit_commit_failed" });
+    expect(cleanupCallCount()).toBe(1);
+  });
+
+  it("cleans up the workspace exactly once, and returns a safe deterministic failure outcome, when post-commit parent verification fails", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls: logCalls } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+    const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({
+      reason: "parent_mismatch",
+      expectedParentSha: "a".repeat(40),
+      actualParentSha: "b".repeat(40),
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+      ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "delivery_commit_parent_mismatch" });
+    expect(cleanupCallCount()).toBe(1);
+    const errorCall = logCalls.find(
+      (call) => call.level === "error" && call.message === "Failed to create the ADA delivery commit.",
+    );
+    expect(errorCall?.fields).toMatchObject({ expectedParentSha: "a".repeat(40), actualParentSha: "b".repeat(40) });
+  });
+
+  it("cleans up the workspace exactly once, and returns a safe failure outcome, when ADA delivery commit creation throws unexpectedly", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls: logCalls } = createFakeLogger();
+    const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+    const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({
+      throwError: new Error("unsafe delivery-commit failure detail"),
+    });
+
+    // Act
+    const outcome = await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+      ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
+    });
+
+    // Assert
+    expect(outcome).toEqual({ ok: false, reason: "delivery_commit_error" });
+    expect(cleanupCallCount()).toBe(1);
+    expect(serializedLogs(logCalls)).not.toContain("unsafe delivery-commit failure detail");
+  });
+
+  it("never logs the prompt or title when ADA delivery commit creation fails", async () => {
+    // Arrange
+    const { repository } = createFakeExecutionRunRepository({ data: validRunData() });
+    const { logger, calls: logCalls } = createFakeLogger();
+    const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+    const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+    const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+    const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+    const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({ reason: "commit_failed" });
+
+    // Act
+    await runExecutor({
+      env: { ADA_EXECUTION_RUN_ID: "req-1" },
+      repository,
+      logger,
+      materializeRepositoryWorkspace,
+      inspectWorkingTree,
+      verifyGitIntegrity,
+      ensureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit,
     });
 
     // Assert

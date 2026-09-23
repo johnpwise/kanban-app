@@ -9,6 +9,7 @@ import { Timestamp, getFirestore } from "firebase-admin/firestore";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { ensureAdaDeliveryBranch } from "./deliveryBranch";
+import { ensureAdaDeliveryCommit } from "./deliveryCommit";
 import { createFirestoreExecutionRunRepository } from "./executionRunRepository";
 import { verifyGitIntegrity } from "./gitIntegrityVerification";
 import { runGit } from "./gitProcess";
@@ -17,6 +18,7 @@ import { runExecutor } from "./runExecutor";
 import { inspectWorkingTree } from "./workingTreeInspection";
 
 import type { EnsureAdaDeliveryBranch } from "./deliveryBranch";
+import type { EnsureAdaDeliveryCommit } from "./deliveryCommit";
 import type { ExecutorLogger } from "./runExecutor";
 import type { VerifyGitIntegrity } from "./gitIntegrityVerification";
 import type { MaterializeRepositoryWorkspace } from "./repositoryWorkspace";
@@ -64,6 +66,9 @@ const localVerifyGitIntegrity: VerifyGitIntegrity = (request) => verifyGitIntegr
 
 /** Binds the real `ensureAdaDeliveryBranch` to the real `runGit`, exercising the actual `git checkout -b` invocation. */
 const localEnsureAdaDeliveryBranch: EnsureAdaDeliveryBranch = (request) => ensureAdaDeliveryBranch({ ...request, runGit });
+
+/** Binds the real `ensureAdaDeliveryCommit` to the real `runGit`, exercising the actual `git add`/`git commit` invocations. */
+const localEnsureAdaDeliveryCommit: EnsureAdaDeliveryCommit = (request) => ensureAdaDeliveryCommit({ ...request, runGit });
 
 function acceptedRunData(overrides: { executionRequestId: string; projectId: string; cardId: string }) {
   return {
@@ -118,6 +123,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       inspectWorkingTree: localInspectWorkingTree,
       verifyGitIntegrity: localVerifyGitIntegrity,
       ensureAdaDeliveryBranch: localEnsureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
     });
 
     // Assert
@@ -171,6 +177,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       inspectWorkingTree: localInspectWorkingTree,
       verifyGitIntegrity: localVerifyGitIntegrity,
       ensureAdaDeliveryBranch: localEnsureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
       claimIdFactory: () => "claim-1",
     });
 
@@ -200,6 +207,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
         inspectWorkingTree: localInspectWorkingTree,
         verifyGitIntegrity: localVerifyGitIntegrity,
         ensureAdaDeliveryBranch: localEnsureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
         claimIdFactory: () => "attempt-A",
       }),
       runExecutor({
@@ -210,6 +218,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
         inspectWorkingTree: localInspectWorkingTree,
         verifyGitIntegrity: localVerifyGitIntegrity,
         ensureAdaDeliveryBranch: localEnsureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
         claimIdFactory: () => "attempt-B",
       }),
     ]);
@@ -285,6 +294,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       inspectWorkingTree: localInspectWorkingTree,
       verifyGitIntegrity: localVerifyGitIntegrity,
       ensureAdaDeliveryBranch: localEnsureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
     });
 
     // Assert
@@ -314,6 +324,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       inspectWorkingTree: localInspectWorkingTree,
       verifyGitIntegrity: localVerifyGitIntegrity,
       ensureAdaDeliveryBranch: localEnsureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
       invokeCodingAgent: async ({ executionRequestId: invokedExecutionRequestId, workspace }) => {
         observedInvocation = { executionRequestId: invokedExecutionRequestId, path: workspace.path };
         await stat(workspace.path);
@@ -330,7 +341,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
     await expect(stat(observedInvocation?.path as string)).rejects.toThrow();
   });
 
-  it("reports workingTree:'changes_detected' and the ADA delivery branch end-to-end when the coding agent writes a new file into the real workspace", async () => {
+  it("reports workingTree:'changes_detected', the ADA delivery branch, and the ADA delivery commit SHA end-to-end when the coding agent writes a new file into the real workspace", async () => {
     // Arrange
     const executionRequestId = `req-${randomUUID()}`;
     const runData = acceptedRunData({ executionRequestId, projectId: "project-1", cardId: "card-1" });
@@ -345,6 +356,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       inspectWorkingTree: localInspectWorkingTree,
       verifyGitIntegrity: localVerifyGitIntegrity,
       ensureAdaDeliveryBranch: localEnsureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
       invokeCodingAgent: async ({ workspace }) => {
         await writeFile(join(workspace.path, "generated-by-agent.txt"), "content\n");
       },
@@ -356,6 +368,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       claimed: true,
       workingTree: "changes_detected",
       deliveryBranch: `ada/${executionRequestId}`,
+      deliveryCommitSha: expect.stringMatching(/^[0-9a-f]{40}$/),
     });
   });
 
@@ -397,6 +410,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       inspectWorkingTree: localInspectWorkingTree,
       verifyGitIntegrity: localVerifyGitIntegrity,
       ensureAdaDeliveryBranch: spyingEnsureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
       invokeCodingAgent: async ({ workspace }) => {
         await writeFile(join(workspace.path, "README.md"), "modified by the coding agent\n");
         await writeFile(join(workspace.path, "generated-by-agent.txt"), "content\n");
@@ -409,6 +423,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       claimed: true,
       workingTree: "changes_detected",
       deliveryBranch: `ada/${executionRequestId}`,
+      deliveryCommitSha: expect.stringMatching(/^[0-9a-f]{40}$/),
     });
     expect(observedAfterBranchCreation?.checkedOutBranch).toBe(`ada/${executionRequestId}`);
     expect(observedAfterBranchCreation?.readmeContent).toBe("modified by the coding agent\n");
@@ -439,6 +454,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       inspectWorkingTree: localInspectWorkingTree,
       verifyGitIntegrity: localVerifyGitIntegrity,
       ensureAdaDeliveryBranch: spyingEnsureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
     });
 
     // Assert
@@ -466,6 +482,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       inspectWorkingTree: spyingInspectWorkingTree,
       verifyGitIntegrity: localVerifyGitIntegrity,
       ensureAdaDeliveryBranch: localEnsureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
       invokeCodingAgent: async ({ workspace }) => {
         await writeFile(join(workspace.path, "agent-change.txt"), "unsanctioned commit\n");
         execFileSync("git", ["add", "agent-change.txt"], { cwd: workspace.path });
@@ -498,6 +515,7 @@ describeWithEmulator("executor against the Firestore emulator", () => {
       inspectWorkingTree: spyingInspectWorkingTree,
       verifyGitIntegrity: localVerifyGitIntegrity,
       ensureAdaDeliveryBranch: localEnsureAdaDeliveryBranch,
+      ensureAdaDeliveryCommit: localEnsureAdaDeliveryCommit,
       invokeCodingAgent: async ({ workspace }) => {
         execFileSync("git", ["checkout", "-b", "coding-agent-branch"], { cwd: workspace.path });
       },
