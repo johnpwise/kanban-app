@@ -24,18 +24,28 @@ project ADA history for that boundary.
     Artifact Registry, tagged with the current git commit SHA (immutable — never relies on
     `latest`).
   - `deploy-job` — create or update the Cloud Run Job definition to point at the most recently
-    built image. **Does not set `ADA_EXECUTION_RUN_ID`** — the Job's persistent definition never
-    carries an execution-specific value. Wires `CODEX_API_KEY` and `ADA_GITHUB_APP_PRIVATE_KEY`
-    from Secret Manager via `--set-secrets` — see "Codex CLI authentication" and "GitHub App
-    delivery credential" below. Also sets the non-secret `ADA_GITHUB_APP_ID` /
-    `ADA_GITHUB_APP_INSTALLATION_ID` env vars when configured.
-  - `execute <executionRunId>` — run the Job once, supplying `ADA_EXECUTION_RUN_ID` as a
-    per-execution override (`--update-env-vars` on `gcloud run jobs execute`). Confirmed live
-    (`.agent-workflows/ada-executor-repository-checkout-live-validation/step-009.md`): this
-    overrides for that execution only and does not modify the Job resource — the Job's stored
-    definition was verified via `gcloud run jobs describe` to be unchanged, still carrying no
-    `ADA_DEBUG_UNSAFE_GIT_STDERR`, immediately after an `execute` call that passed it as a
-    per-execution override. This is distinct from `gcloud run jobs update --update-env-vars`
+    built image. **Does not set `ADA_EXECUTION_RUN_ID`, `CODEX_MODEL`, or
+    `CODEX_REASONING_EFFORT`** — the Job's persistent definition never carries an
+    execution-specific value; those are supplied per execution instead (see `execute` below).
+    Wires `CODEX_API_KEY` and `ADA_GITHUB_APP_PRIVATE_KEY` from Secret Manager via
+    `--set-secrets` — see "Codex CLI authentication" and "GitHub App delivery credential" below.
+    Also sets the non-secret `ADA_GITHUB_APP_ID` / `ADA_GITHUB_APP_INSTALLATION_ID` env vars when
+    configured.
+  - `execute <executionRunId> <codexModel> [reasoningEffort]` — run the Job once, supplying
+    `ADA_EXECUTION_RUN_ID`, `CODEX_MODEL`, and (if given) `CODEX_REASONING_EFFORT` as a
+    per-execution override (`--update-env-vars` on `gcloud run jobs execute`). `codexModel` must be
+    one of `deploy.sh`'s `ALLOWED_CODEX_MODELS` (currently `gpt-5_6-luna`, `gpt-5_6-terra`);
+    `reasoningEffort`, if given, must be one of `ALLOWED_CODEX_REASONING_EFFORTS` (currently `low`,
+    `medium`, `high` — a deliberately narrower, currently-approved subset of the full
+    `low|medium|high|xhigh|max` the executor's own `CODEX_REASONING_EFFORT` schema accepts; extend
+    both arrays together when a new model or effort level is approved). `CODEX_MODEL` is required
+    by `executor/src/codexProviderConfig.ts` — omitting it fails the argument check before any
+    `gcloud` call is made. Confirmed live
+    (`.agent-workflows/ada-executor-repository-checkout-live-validation/step-009.md`): a
+    per-execution override overrides for that execution only and does not modify the Job resource —
+    the Job's stored definition was verified via `gcloud run jobs describe` to be unchanged, still
+    carrying no `ADA_DEBUG_UNSAFE_GIT_STDERR`, immediately after an `execute` call that passed it as
+    a per-execution override. This is distinct from `gcloud run jobs update --update-env-vars`
     (used by `deploy-job`'s underlying `gcloud run jobs deploy` machinery and by manual
     diagnostics), which **merges** into the Job's existing env vars rather than replacing them —
     also confirmed live in the same step, and the reason `deploy-job` never uses `update` directly.

@@ -16,9 +16,14 @@
 #   deploy.sh build            # build the executor image (docker if available, else Cloud Build)
 #                               # and push it to Artifact Registry, tagged with the git commit SHA
 #   deploy.sh deploy-job       # create or update the Cloud Run Job to use the most recently built
-#                               # image (ADA_EXECUTION_RUN_ID is intentionally left unset here)
-#   deploy.sh execute <runId>  # run the Job once, overriding ADA_EXECUTION_RUN_ID for that
-#                               # execution only — the Job's stored definition is not modified
+#                               # image (ADA_EXECUTION_RUN_ID/CODEX_MODEL/CODEX_REASONING_EFFORT are
+#                               # intentionally left unset here — supplied per execution instead)
+#   deploy.sh execute <runId> <codexModel> [reasoningEffort]
+#                               # run the Job once, overriding ADA_EXECUTION_RUN_ID, CODEX_MODEL, and
+#                               # (if given) CODEX_REASONING_EFFORT for that execution only — the
+#                               # Job's stored definition is not modified. codexModel must be one of
+#                               # ALLOWED_CODEX_MODELS below; reasoningEffort (optional) must be one
+#                               # of ALLOWED_CODEX_REASONING_EFFORTS.
 #
 # Configuration: see config.env.example. Copy to config.env (gitignored) or export the same names.
 
@@ -28,8 +33,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXECUTOR_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 usage() {
-  echo "Usage: $0 {setup|build|deploy-job|execute <executionRunId>}" >&2
+  echo "Usage: $0 {setup|build|deploy-job|execute <executionRunId> <codexModel> [reasoningEffort]}" >&2
 }
+
+# The only Codex models/effort levels currently approved for ADA executor runs. Extend these
+# arrays (and executor/src/codexProviderConfig.ts's CODEX_REASONING_EFFORT_VALUES, which also
+# accepts xhigh/max) when a new model or effort level is approved for use.
+ALLOWED_CODEX_MODELS=("gpt-5_6-luna" "gpt-5_6-terra")
+ALLOWED_CODEX_REASONING_EFFORTS=("low" "medium" "high")
 
 case "${1:-}" in
 setup | build | deploy-job | execute) ;;
@@ -254,18 +265,46 @@ cmd_deploy_job() {
   echo "==> Job deployed."
 }
 
+contains_value() {
+  local needle="$1"
+  shift
+  local candidate
+  for candidate in "$@"; do
+    if [[ "$candidate" == "$needle" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 cmd_execute() {
   require_cmd gcloud
-  local run_id="${1:?Usage: deploy.sh execute <executionRunId>}"
+  local run_id="${1:?Usage: deploy.sh execute <executionRunId> <codexModel> [reasoningEffort]}"
+  local codex_model="${2:?Usage: deploy.sh execute <executionRunId> <codexModel> [reasoningEffort]}"
+  local reasoning_effort="${3:-}"
 
-  echo "==> Executing Cloud Run Job '$JOB_NAME' once, with ADA_EXECUTION_RUN_ID=$run_id"
+  if ! contains_value "$codex_model" "${ALLOWED_CODEX_MODELS[@]}"; then
+    echo "error: codexModel must be one of: ${ALLOWED_CODEX_MODELS[*]} (got '$codex_model')" >&2
+    exit 1
+  fi
+
+  local env_vars="ADA_EXECUTION_RUN_ID=$run_id,CODEX_MODEL=$codex_model"
+  if [[ -n "$reasoning_effort" ]]; then
+    if ! contains_value "$reasoning_effort" "${ALLOWED_CODEX_REASONING_EFFORTS[@]}"; then
+      echo "error: reasoningEffort must be one of: ${ALLOWED_CODEX_REASONING_EFFORTS[*]} (got '$reasoning_effort')" >&2
+      exit 1
+    fi
+    env_vars="$env_vars,CODEX_REASONING_EFFORT=$reasoning_effort"
+  fi
+
+  echo "==> Executing Cloud Run Job '$JOB_NAME' once, with $env_vars"
   echo "    as a per-execution override only — confirmed live (see"
   echo "    .agent-workflows/ada-executor-repository-checkout-live-validation/step-009.md) that"
   echo "    this does not modify the Job's stored definition."
   gcloud run jobs execute "$JOB_NAME" \
     --region="$REGION" \
     --project="$PROJECT_ID" \
-    --update-env-vars="ADA_EXECUTION_RUN_ID=$run_id" \
+    --update-env-vars="$env_vars" \
     --wait
 }
 
@@ -273,5 +312,5 @@ case "$1" in
 setup) cmd_setup ;;
 build) cmd_build ;;
 deploy-job) cmd_deploy_job ;;
-execute) cmd_execute "${2:-}" ;;
+execute) cmd_execute "${2:-}" "${3:-}" "${4:-}" ;;
 esac
