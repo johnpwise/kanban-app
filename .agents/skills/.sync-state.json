@@ -1,0 +1,67 @@
+{
+  "syncedAt": "2026-09-24T18:46:48.706Z",
+  "skills": {
+    "feature-planning": {
+      "SKILL.md": "1221091934f8a7b2e40060907443472a590dc8efecc83913d6faedca9a0bb208",
+      "agents/openai.yaml": "8a7e9a56067476509337fe663c0126766bb90fec16811bf5141a7bbeecc4b8e8"
+    },
+    "tdd-slice": {
+      "SKILL.md": "81fcba694b6e2c4bd77d599a4859a6317ad2b6787e27fbbbe2d152c1061f37e2",
+      "agents/openai.yaml": "66e648de3d5a420238bd205b12ff8b94bccf4b710e2387e8b0e4aa922d009796"
+    },
+    "review-change": {
+      "SKILL.md": "8fa6ad4f80e60192896743e04ff020afdf50fbf5cd3ae629e4dfa6ca07c23967",
+      "references/correctness.md": "93807e53aa5918b5d3f4e67a6d640a5c222a0d129245a34664b871e5b319683b",
+      "references/accessibility.md": "ad0863e425582fbaa2eda62bc39fe9a77cd4f9ef38e73e30e8ec6f7e00e11dae",
+      "references/react-composition.md": "fa24f063c710a8cfc2151d598625f832c17898e07f11c3f70c45f0279617fda1",
+      "references/vue-composition.md": "2563cd4e282a4ec6bd9a4b44ebe78d977b1d2b12f815158fd6aaf3ec3b1d6296",
+      "references/state-ownership.md": "87c0a199e362d9532b22f0bb6d3af9cdcb1208b87afa6156aeb2b63109d00f02",
+      "references/api-contracts.md": "7a18d5990dd1b63de45d7095e0b419f0a1bc696e50e21a105ad75725b5f3068b",
+      "references/persistence.md": "dce458c11877c8db943a972c648819f3310f8a37131d8089d247e2e06cacee80",
+      "references/error-observability.md": "1cce012db871244cc3f5ffc6f0197af3ccb2a087e23db6f9b4809c3d92972c57",
+      "references/route-boundary.md": "b43386455588e20ef5e79866082755917ee5f6e15183c101660521696dfa6000",
+      "agents/openai.yaml": "cb27ea3d2564dcd97888cafb49f78bb863a9a14b455f463fa05768485a51919b"
+    },
+    "dependency-assessment": {
+      "SKILL.md": "414333f28b8d8e17071a7b3cc47824d02639d4fb33fc4496d727ecbc2a4f66b4",
+      "agents/openai.yaml": "70090e9fcbe040948277d7f755efbfc388383625606388d83f76eb9f12e513ca"
+    },
+    "commit-and-push": {
+      "SKILL.md": "08bcf1947d0f5f17c87ad215ecf951f0fb550b622ed641c663ad8f7050b2168b",
+      "references/commit-message-guidelines.md": "30882838750204f7efbcb4a68cc64dc114662e04145703e0fef2a3a7edf7dba6",
+      "agents/openai.yaml": "2e91caaef299ce28f644d0b37c04dd2f935c96416afc05ba08a848af71c0a8e6"
+    },
+    "create-develop-pr": {
+      "SKILL.md": "7746aac5d467c3987b936ba8cd9687fb8f952667b30792144003db1d68b823a6",
+      "agents/openai.yaml": "ade68c88fc841c5703d5b5179063b262e32c8fd9bf5587737c290d198421e0b5"
+    },
+    "start-release": {
+      "SKILL.md": "94cd31026b52fec9f8065257ea587f0e735ccd94b723177a3faf5d64e5e24715",
+      "agents/openai.yaml": "b639eb2065759ddc854499fef1c43c41f37797d1f6a35b13d66e744c01a79a45"
+    },
+    "create-release-prs": {
+      "SKILL.md": "205141bc6c8675a51944c63f660489a94520af0aec4637a98e8dc967645dfdc8",
+      "agents/openai.yaml": "2649bb14d24de3ce0967896db81fd29faa00cdcda7c0e2a57aa120cdc1366e2e"
+    },
+    "create-annotated-tag": {
+      "SKILL.md": "ff9bc94cabf2ac646e01cb5065b8dae4d8491138eac1e7375a1390858c40e2a8",
+      "agents/openai.yaml": "6d7015b8f372be84ac680d2d88ae1e2ea8801baa5660785619bd93ec0cae0c7a"
+    },
+    "finalise-release": {
+      "SKILL.md": "44a9dfbadce8c70a418f8ff8503810e632beac63a170e5a69d56c9f8478ea8f5",
+      "agents/openai.yaml": "44ba7c0aceb483f48d0ad2dafdd61818ec306d839a532dedbad839e94cff3e95"
+    },
+    "start-hotfix": {
+      "SKILL.md": "b8e7530df44771add09a8e1f8a57f30f10175bd1928149e2f012438450072d33",
+      "agents/openai.yaml": "2eba58e7d214221a3ac1475e1ad7b94168f495bfdd125a8a3ecef8321ed2574d"
+    },
+    "create-hotfix-prs": {
+      "SKILL.md": "81b43e819791ccdd88b2a94eb9c2664fbbc9747b56559659108399244df59f15",
+      "agents/openai.yaml": "5224b3c644423f415685b08f74c66ca0fb9bc8e039c531ea93324a81c0f8fbfa"
+    },
+    "finalise-hotfix": {
+      "SKILL.md": "798a45e4a277c65b58e316d5c6799cd486ff3e719fecb67915fc7800a0565328",
+      "agents/openai.yaml": "c60f89d08ac89fb6bb17acaf0e260228275396cf6726565e24f1cc967880db46"
+    }
+  }
+}

@@ -35,6 +35,23 @@ This document defines the default end-to-end workflow for bug triage and fixes w
   (failing regression test) evidence exists.
 - Classify complexity (`trivial` or `non-trivial`) with rationale.
 
+### Mandatory work-branch preflight
+
+Before creating a workflow artifact or editing a test or production file, complete all of the
+following. Any failure is `blocked`; report the exact Git failure and make no implementation edit.
+
+1. Require a clean working tree; otherwise stop and report the uncommitted files.
+2. Fetch `origin/develop`; stop if `origin` or `origin/develop` is unavailable.
+3. Switch to local `develop`, creating a tracking branch from `origin/develop` if it is absent.
+4. Run `git pull --ff-only origin develop`. Stop on a failure or divergence; never merge, rebase,
+   reset, or discard local work to force synchronization.
+5. Derive a concise Git-safe lowercase kebab-case slug from the normalized bug summary. Stop if no
+   usable slug can be derived.
+6. Check that `bugfix/<slug>` exists neither locally nor on `origin`. A collision stops intake;
+   never reuse the branch or generate an automatic suffix.
+7. Create `bugfix/<slug>` from synchronized local `develop`. Record the branch, `develop` base
+   SHA, and preflight command evidence in the first Step Record. Do not push an empty branch.
+
 ### Trivial fast-path eligibility
 
 The fast path skips **planning ceremony only** — never the failing regression test or the review
@@ -49,7 +66,7 @@ If any condition fails, do the full planning pass inline.
 
 ## Delivery path
 
-1. Intake + normalization + complexity classification (inline).
+1. Intake + normalization + mandatory work-branch preflight + complexity classification (inline).
 2. Reproduce the defect. **RED**: write the failing test that captures the correct behaviour, and
    confirm it fails for the expected reason.
 3. **GREEN**: apply the fix; the new test plus the regression surface pass. **REFACTOR** with no

@@ -79,6 +79,7 @@ per-stack reviewer / guardian aliases still resolve (to the Delivery Engineer) f
 When downstream repos upgrade workflow behavior, copy these core files together to avoid mixed policy states:
 
 - if a stack overlay enforces feature/bug intake triggers (for example `New Feature` and `Bug Fix`), update `agents/delivery-engineer.agent.md` together with that stack's feature-routing/feature-intake and bug-routing/bug-intake docs
+- when changing mandatory feature/bug work-branch preflight policy, update the core routing and intake documents together with every bootstrapper's generated root `AGENTS.md` and `README.md` defaults
 
 Copy these files together:
 
