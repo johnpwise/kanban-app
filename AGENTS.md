@@ -101,6 +101,7 @@ Coding standards for generated Next.js code/tests are inherited from:
 * `delivery-engineer` remains the active workflow owner.
 * Feature workflow entry requires a leading `New Feature` trigger.
 * Bug workflow entry requires a leading `Bug Fix` trigger.
+* Mandatory work-branch preflight: before workflow artifacts or code/test edits, cleanly synchronize `develop` with `origin/develop` using `git pull --ff-only origin develop`, derive a kebab-case slug, reject collisions, and create `feature/<slug>` or `bugfix/<slug>` without pushing an empty branch.
 * Triggered requests run in fail-closed mode until `.agent-workflows/<workflow_id>/index.md` and the first workflow artifact is persisted.
 * In fail-closed mode, the first response must report workflow ownership/routing state, not direct implementation edits.
 * Every workflow step is recorded per the core `handoff-template.md` (compact Step Record; full Cross-Context Handoff Package only for a separate agent context).

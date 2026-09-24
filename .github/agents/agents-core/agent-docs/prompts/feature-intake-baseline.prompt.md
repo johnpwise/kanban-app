@@ -7,6 +7,7 @@ Each stack pack's own `<stack>-feature-intake.prompt.md` (frontend) or `api-feat
 
 - Feature intake requires the request to start with `New Feature`.
 - If the trigger is missing, do not dispatch a feature workflow; request a correctly triggered reissue first.
+- Before creating workflow artifacts or editing tests/production code, complete the mandatory work-branch preflight: require a clean tree, fetch and `git pull --ff-only origin develop`, derive a Git-safe kebab-case slug from the normalized summary, reject local/remote collisions, and create `feature/<slug>` from synchronized `develop`. Stop on any failure; never merge, rebase, reset, discard work, reuse/auto-suffix a branch, or push an empty branch.
 - After trigger validation, normalize the request, then plan and deliver it in a single primary context (plan → BDD → RED → GREEN → REFACTOR → verify → review lenses → commit). Delegate to a separate agent context only when the Delegation Gate is met.
 - Under workflow triggers, use fail-closed behavior: no implementation edits before workflow artifacts are bootstrapped and the required RED evidence exists.
 

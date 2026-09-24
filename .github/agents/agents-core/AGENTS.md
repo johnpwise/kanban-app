@@ -26,6 +26,8 @@ Unless a stack or repo overlay says otherwise, agents should assume:
 - `delivery-engineer` (the Delivery Engineer, alias `Delivery-Engineer`) is the active workflow owner and does the work in one primary context
 - every feature and bug request is planned inline with `skills/feature-planning/` (complexity classification, test strategy, capability owners) before any test or production code
 - stack overlays may define feature-intake command triggers; when present, `delivery-engineer` should enforce them before feature dispatch
+- every valid `New Feature` or `Bug Fix` intake must complete the mandatory work-branch preflight before any workflow artifact, test, or production-file write: synchronize local `develop` with `origin/develop` using `git pull --ff-only origin develop`, then create a new `feature/<derived-kebab-case-slug>` or `bugfix/<derived-kebab-case-slug>` branch from it
+- the work-branch preflight is fail-closed: require a clean tree, a reachable `origin/develop`, a usable slug derived from the normalized request, and no local or remote branch-name collision; never merge, rebase, reset, discard work, reuse a colliding branch, auto-suffix it, or push an empty branch
 - when a stack overlay defines explicit intake triggers, triggered requests should run in fail-closed mode until required workflow artifacts are persisted by the workflow owner
 - in fail-closed mode, no implementation edits are allowed before required workflow artifacts exist
 - in fail-closed mode, the first response should report workflow ownership and routing state, not direct implementation
