@@ -41,6 +41,7 @@ Workflow defaults:
 - `delivery-engineer` is the workflow owner.
 - Feature workflow intake requires a leading `New Feature` trigger.
 - Bug workflow intake requires a leading `Bug Fix` trigger.
+- Mandatory work-branch preflight: before workflow artifacts or code/test edits, cleanly synchronize `develop` with `origin/develop` using `git pull --ff-only origin develop`, derive a kebab-case slug, reject collisions, and create `feature/<slug>` or `bugfix/<slug>` without pushing an empty branch.
 - Triggered feature/bug workflow requests run in fail-closed mode until `.agent-workflows/<workflow_id>/index.md` and the first workflow artifact is persisted.
 - In fail-closed mode, the first response reports workflow ownership/routing state rather than direct implementation edits.
 - Workflow steps are recorded per the core `handoff-template.md` (Step Record by default).
