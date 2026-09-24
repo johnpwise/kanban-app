@@ -39,7 +39,7 @@ usage() {
 # The only Codex models/effort levels currently approved for ADA executor runs. Extend these
 # arrays (and executor/src/codexProviderConfig.ts's CODEX_REASONING_EFFORT_VALUES, which also
 # accepts xhigh/max) when a new model or effort level is approved for use.
-ALLOWED_CODEX_MODELS=("gpt-5_6-luna" "gpt-5_6-terra")
+ALLOWED_CODEX_MODELS=("gpt-5.6-luna" "gpt-5.6-terra")
 ALLOWED_CODEX_REASONING_EFFORTS=("low" "medium" "high")
 
 case "${1:-}" in

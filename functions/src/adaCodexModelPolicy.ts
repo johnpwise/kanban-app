@@ -6,7 +6,7 @@ import { z } from "zod";
  * shared package across the `functions`/`executor`/bash boundary) per the deliberate scope decision
  * for this slice. Extend both arrays together when a new model is approved.
  */
-export const ALLOWED_CODEX_MODELS = ["gpt-5_6-luna", "gpt-5_6-terra"] as const;
+export const ALLOWED_CODEX_MODELS = ["gpt-5.6-luna", "gpt-5.6-terra"] as const;
 
 /**
  * Mirrors `executor/deploy/deploy.sh`'s `ALLOWED_CODEX_REASONING_EFFORTS` — a deliberately narrower,
