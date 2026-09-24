@@ -79,19 +79,36 @@ const executionRunDeliverySchema = z.object({
   pullRequest: executionRunDeliveryPullRequestSchema.optional(),
 });
 
+/**
+ * The durable, independently-anchored terminal CI result written by `recordCiResult` once the
+ * bounded CI controller (`deliveryCiController.ts`) observes a genuine terminal GitHub Actions
+ * outcome for the exact `delivery.commitSha` (see `executionRunRepository.ts`). Executor-only,
+ * like `claim` / `sourceRevision` / `delivery` — not modelled on the Functions side, which never
+ * re-validates a document once these executor-owned fields exist.
+ */
+const executionRunCiSchema = z.object({
+  commitSha: z.string().min(1),
+  state: z.enum(["succeeded", "failed"]),
+  runId: z.number(),
+  htmlUrl: z.string(),
+  conclusion: z.string().min(1).optional(),
+  recordedAt: z.instanceof(Timestamp),
+});
+
 /** Shape of an `executionRuns/{executionRequestId}` Firestore document's data. */
 const executionRunDocumentSchema = z.object({
   executionRequestId: z.string().min(1),
   correlationId: z.string().min(1),
   projectId: projectIdSchema,
   cardId: z.string().min(1),
-  status: z.literal("accepted"),
+  status: z.enum(["accepted", "ci_succeeded", "ci_failed"]),
   acceptedAt: z.instanceof(Timestamp),
   firstMessageId: z.string().min(1).optional(),
   input: executionRunInputSchema,
   claim: executionRunClaimSchema.optional(),
   sourceRevision: executionRunSourceRevisionSchema.optional(),
   delivery: executionRunDeliverySchema.optional(),
+  ci: executionRunCiSchema.optional(),
 });
 
 export type ExecutionRunInput = z.infer<typeof executionRunInputSchema>;

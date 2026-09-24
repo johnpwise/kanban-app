@@ -34,7 +34,9 @@ export type DeliveryCiControllerOutcome =
   | { outcome: "ci_failed"; runId: number; htmlUrl: string; conclusion: string; observationCount: number }
   | ({ outcome: "observation_failed"; observationCount: number } & Omit<ObservationFailure, "ok">)
   | { outcome: "observation_error"; observationCount: number }
-  | { outcome: "exhausted"; observationCount: number };
+  | { outcome: "exhausted"; observationCount: number }
+  | { outcome: "ci_result_persistence_error"; observationCount: number }
+  | { outcome: "ci_result_conflict"; observationCount: number };
 
 /**
  * Bounded orchestration boundary over the existing one-shot `observeDeliveryCiStatus()` primitive.
@@ -43,8 +45,10 @@ export type DeliveryCiControllerOutcome =
  * a caller-supplied value — then repeatedly observes only while CI remains `pending`, bounded by
  * `policy.maxObservations`. This is the first asynchronous lifecycle step after the coding
  * executor (`runExecutor`) has already exited; it does not run inside that process and never polls
- * from it. Never mutates GitHub or the repository, and never persists a terminal CI result — that
- * is deferred to a later slice.
+ * from it. Never mutates GitHub. A genuine terminal observation is durably recorded via
+ * `repository.recordCiResult` (anchored to the same `delivery.commitSha`, never `sourceRevision.
+ * headSha`) before `ci_succeeded`/`ci_failed` is ever reported — persistence failure or conflict is
+ * reported as its own distinct, fail-closed outcome instead.
  */
 export async function runDeliveryCiController(
   params: RunDeliveryCiControllerParams,
@@ -105,12 +109,37 @@ export async function runDeliveryCiController(
       return { outcome: "observation_failed", observationCount, ...failureFields };
     }
 
-    if (observation.state === "succeeded") {
-      logger?.info("CI succeeded for the verified ADA delivery commit.", { ...safeIdentifiers, observationCount });
-      return { outcome: "ci_succeeded", runId: observation.runId, htmlUrl: observation.htmlUrl, observationCount };
-    }
+    if (observation.state === "succeeded" || observation.state === "failed") {
+      let recordCiResultOutcome;
+      try {
+        recordCiResultOutcome = await repository.recordCiResult(executionRunId, {
+          commitSha: deliveryCommitSha,
+          state: observation.state,
+          runId: observation.runId,
+          htmlUrl: observation.htmlUrl,
+          ...(observation.state === "failed" ? { conclusion: observation.conclusion } : {}),
+        });
+      } catch {
+        logger?.error("Unexpected failure durably persisting the terminal CI result.", {
+          ...safeIdentifiers,
+          observationCount,
+        });
+        return { outcome: "ci_result_persistence_error", observationCount };
+      }
 
-    if (observation.state === "failed") {
+      if (recordCiResultOutcome.outcome === "conflict") {
+        logger?.error("A conflicting CI result is already durably persisted for this execution run.", {
+          ...safeIdentifiers,
+          observationCount,
+        });
+        return { outcome: "ci_result_conflict", observationCount };
+      }
+
+      if (observation.state === "succeeded") {
+        logger?.info("CI succeeded for the verified ADA delivery commit.", { ...safeIdentifiers, observationCount });
+        return { outcome: "ci_succeeded", runId: observation.runId, htmlUrl: observation.htmlUrl, observationCount };
+      }
+
       logger?.error("CI failed for the verified ADA delivery commit.", {
         ...safeIdentifiers,
         observationCount,

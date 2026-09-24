@@ -11,6 +11,8 @@ export type RecordSourceRevisionOutcome = { outcome: "created" } | { outcome: "a
 
 export type RecordDeliveryOutcome = { outcome: "created" } | { outcome: "already_recorded" } | { outcome: "conflict" };
 
+export type RecordCiResultOutcome = { outcome: "created" } | { outcome: "already_recorded" } | { outcome: "conflict" };
+
 export interface DeliveryPullRequestIdentity {
   number: number;
   htmlUrl: string;
@@ -20,6 +22,16 @@ export interface DeliveryIdentity {
   branch: string;
   commitSha: string;
   pullRequest?: DeliveryPullRequestIdentity;
+}
+
+export interface CiResult {
+  /** The exact verified ADA delivery commit this terminal result is anchored to — never
+   * `sourceRevision.headSha`, a branch, or a PR. */
+  commitSha: string;
+  state: "succeeded" | "failed";
+  runId: number;
+  htmlUrl: string;
+  conclusion?: string;
 }
 
 export interface ExecutionRunRepository {
@@ -60,6 +72,22 @@ export interface ExecutionRunRepository {
    * `recordSourceRevision`.
    */
   recordDelivery(executionRunId: string, delivery: DeliveryIdentity): Promise<RecordDeliveryOutcome>;
+  /**
+   * Durably records a terminal GitHub Actions CI result on `executionRuns/{executionRunId}`
+   * together with the minimum lifecycle `status` transition (`ci_succeeded` / `ci_failed`) — one
+   * Firestore transaction, so no reader ever observes `ci` written without the matching `status`
+   * or vice versa. Idempotency identity is `(commitSha, state)`: if no `ci` is present yet, sets
+   * `{ commitSha, state, runId, htmlUrl, conclusion?, recordedAt }` and the matching `status`,
+   * returning `{ outcome: "created" }`; if one is already present with the same `commitSha` and
+   * `state` (this call or a concurrent one committed first), returns
+   * `{ outcome: "already_recorded" }` without writing — `runId`/`htmlUrl`/`conclusion` are
+   * recorded once and never re-verified on repeat calls, mirroring `recordDelivery`'s treatment of
+   * `pullRequest`; if one is already present with a *different* `commitSha`, or the *same*
+   * `commitSha` but a *different* `state`, returns `{ outcome: "conflict" }` without writing — an
+   * established terminal result is never silently overwritten. A missing document at write time is
+   * treated the same as a conflict, mirroring `recordSourceRevision`/`recordDelivery`.
+   */
+  recordCiResult(executionRunId: string, result: CiResult): Promise<RecordCiResultOutcome>;
 }
 
 let firestore: Firestore | undefined;
@@ -158,6 +186,41 @@ export function createFirestoreExecutionRunRepository(): ExecutionRunRepository 
           return { outcome: "created" };
         }
         if (existingDelivery.branch === delivery.branch && existingDelivery.commitSha === delivery.commitSha) {
+          return { outcome: "already_recorded" };
+        }
+        return { outcome: "conflict" };
+      });
+    },
+
+    async recordCiResult(executionRunId: string, result: CiResult) {
+      const firestore = getExecutionRunFirestore();
+      const docRef = firestore.collection(EXECUTION_RUNS_COLLECTION).doc(executionRunId);
+      const status = result.state === "succeeded" ? "ci_succeeded" : "ci_failed";
+
+      return firestore.runTransaction<RecordCiResultOutcome>(async (transaction) => {
+        const snapshot = await transaction.get(docRef);
+        const existingCi = (
+          snapshot.data() as { ci?: { commitSha?: unknown; state?: unknown } } | undefined
+        )?.ci;
+
+        if (!snapshot.exists) {
+          return { outcome: "conflict" };
+        }
+        if (!existingCi) {
+          transaction.update(docRef, {
+            ci: {
+              commitSha: result.commitSha,
+              state: result.state,
+              runId: result.runId,
+              htmlUrl: result.htmlUrl,
+              recordedAt: FieldValue.serverTimestamp(),
+              ...(result.conclusion ? { conclusion: result.conclusion } : {}),
+            },
+            status,
+          });
+          return { outcome: "created" };
+        }
+        if (existingCi.commitSha === result.commitSha && existingCi.state === result.state) {
           return { outcome: "already_recorded" };
         }
         return { outcome: "conflict" };

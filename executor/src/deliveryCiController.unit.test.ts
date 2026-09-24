@@ -158,9 +158,9 @@ describe("runDeliveryCiController", () => {
   });
 
   describe("terminal on first observation", () => {
-    it("returns ci_succeeded on the first observation, using the exact persisted repository and delivery commit sha, and never waits", async () => {
+    it("returns ci_succeeded on the first observation, durably persists the exact delivery commit sha, and never waits", async () => {
       // Arrange
-      const { repository } = createFakeExecutionRunRepository({ data: deliveredRunData() });
+      const { repository, recordCiResultCalls } = createFakeExecutionRunRepository({ data: deliveredRunData() });
       const { observe, calls: observeCalls } = createFakeObserve([
         { ok: true, state: "succeeded", runId: 501, htmlUrl: HTML_URL },
       ]);
@@ -178,12 +178,19 @@ describe("runDeliveryCiController", () => {
       // Assert
       expect(outcome).toEqual({ outcome: "ci_succeeded", runId: 501, htmlUrl: HTML_URL, observationCount: 1 });
       expect(observeCalls).toEqual([{ repository: REPOSITORY, deliveryCommitSha: DELIVERY_COMMIT_SHA }]);
+      expect(recordCiResultCalls).toEqual([
+        {
+          executionRunId: EXECUTION_RUN_ID,
+          result: { commitSha: DELIVERY_COMMIT_SHA, state: "succeeded", runId: 501, htmlUrl: HTML_URL },
+        },
+      ]);
+      expect(recordCiResultCalls[0].result.commitSha).not.toBe(SOURCE_REVISION_SHA);
       expect(waitCalls).toHaveLength(0);
     });
 
-    it("returns ci_failed on the first observation, without retrying", async () => {
+    it("returns ci_failed on the first observation, durably persisting the terminal conclusion, without retrying", async () => {
       // Arrange
-      const { repository } = createFakeExecutionRunRepository({ data: deliveredRunData() });
+      const { repository, recordCiResultCalls } = createFakeExecutionRunRepository({ data: deliveredRunData() });
       const { observe, calls: observeCalls } = createFakeObserve([
         { ok: true, state: "failed", runId: 502, htmlUrl: HTML_URL, conclusion: "failure" },
       ]);
@@ -207,13 +214,19 @@ describe("runDeliveryCiController", () => {
         observationCount: 1,
       });
       expect(observeCalls).toHaveLength(1);
+      expect(recordCiResultCalls).toEqual([
+        {
+          executionRunId: EXECUTION_RUN_ID,
+          result: { commitSha: DELIVERY_COMMIT_SHA, state: "failed", runId: 502, htmlUrl: HTML_URL, conclusion: "failure" },
+        },
+      ]);
       expect(waitCalls).toHaveLength(0);
     });
 
     it("observes using the persisted delivery commit sha, never the source revision head sha or delivery branch name", async () => {
       // Arrange — sourceRevision.headSha and delivery.branch are deliberately distinct values from
       // delivery.commitSha, so the assertion below fails if the controller ever substitutes either.
-      const { repository } = createFakeExecutionRunRepository({ data: deliveredRunData() });
+      const { repository, recordCiResultCalls } = createFakeExecutionRunRepository({ data: deliveredRunData() });
       const { observe, calls: observeCalls } = createFakeObserve([{ ok: true, state: "pending" }]);
       const { wait } = createFakeWait();
 
@@ -229,13 +242,80 @@ describe("runDeliveryCiController", () => {
       // Assert
       expect(observeCalls).toEqual([{ repository: REPOSITORY, deliveryCommitSha: DELIVERY_COMMIT_SHA }]);
       expect(observeCalls[0].deliveryCommitSha).not.toBe(SOURCE_REVISION_SHA);
+      expect(recordCiResultCalls).toHaveLength(0);
+    });
+
+    it("does not durably record a CI result when the persisted repository's recordCiResult call throws unexpectedly", async () => {
+      // Arrange
+      const { repository } = createFakeExecutionRunRepository({
+        data: deliveredRunData(),
+        recordCiResultThrowError: new Error("Firestore unavailable"),
+      });
+      const { observe } = createFakeObserve([{ ok: true, state: "succeeded", runId: 501, htmlUrl: HTML_URL }]);
+      const { wait } = createFakeWait();
+
+      // Act
+      const outcome = await runDeliveryCiController({
+        executionRunId: EXECUTION_RUN_ID,
+        repository,
+        observe,
+        wait,
+        policy: DEFAULT_POLICY,
+      });
+
+      // Assert — never reports ci_succeeded when durable persistence itself failed.
+      expect(outcome).toEqual({ outcome: "ci_result_persistence_error", observationCount: 1 });
+    });
+
+    it("fails closed and never reports ci_succeeded when durable persistence reports a conflicting terminal record", async () => {
+      // Arrange
+      const { repository } = createFakeExecutionRunRepository({
+        data: deliveredRunData(),
+        recordCiResult: { outcome: "conflict" },
+      });
+      const { observe } = createFakeObserve([{ ok: true, state: "succeeded", runId: 501, htmlUrl: HTML_URL }]);
+      const { wait } = createFakeWait();
+
+      // Act
+      const outcome = await runDeliveryCiController({
+        executionRunId: EXECUTION_RUN_ID,
+        repository,
+        observe,
+        wait,
+        policy: DEFAULT_POLICY,
+      });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "ci_result_conflict", observationCount: 1 });
+    });
+
+    it("reports ci_succeeded when durable persistence is already_recorded — a duplicate/retried controller run converges safely", async () => {
+      // Arrange
+      const { repository } = createFakeExecutionRunRepository({
+        data: deliveredRunData(),
+        recordCiResult: { outcome: "already_recorded" },
+      });
+      const { observe } = createFakeObserve([{ ok: true, state: "succeeded", runId: 501, htmlUrl: HTML_URL }]);
+      const { wait } = createFakeWait();
+
+      // Act
+      const outcome = await runDeliveryCiController({
+        executionRunId: EXECUTION_RUN_ID,
+        repository,
+        observe,
+        wait,
+        policy: DEFAULT_POLICY,
+      });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "ci_succeeded", runId: 501, htmlUrl: HTML_URL, observationCount: 1 });
     });
   });
 
   describe("pending loop mechanics", () => {
     it("waits once between a pending observation and a succeeding second observation, and never waits again", async () => {
       // Arrange
-      const { repository } = createFakeExecutionRunRepository({ data: deliveredRunData() });
+      const { repository, recordCiResultCalls } = createFakeExecutionRunRepository({ data: deliveredRunData() });
       const { observe, calls: observeCalls } = createFakeObserve([
         { ok: true, state: "pending" },
         { ok: true, state: "succeeded", runId: 9, htmlUrl: HTML_URL },
@@ -255,15 +335,16 @@ describe("runDeliveryCiController", () => {
       expect(outcome).toEqual({ outcome: "ci_succeeded", runId: 9, htmlUrl: HTML_URL, observationCount: 2 });
       expect(observeCalls).toHaveLength(2);
       expect(waitCalls).toEqual([2_000]);
+      expect(recordCiResultCalls).toHaveLength(1);
     });
 
-    it("returns exhausted after the configured bound of pending observations, waiting exactly bound-minus-one times, and never observes again", async () => {
+    it("returns exhausted after the configured bound of pending observations, waiting exactly bound-minus-one times, and never observes again or persists a false terminal result", async () => {
       // Arrange
       const pendingOutcomes: ObserveDeliveryCiStatusOutcome[] = Array.from({ length: 4 }, () => ({
         ok: true,
         state: "pending",
       }));
-      const { repository } = createFakeExecutionRunRepository({ data: deliveredRunData() });
+      const { repository, recordCiResultCalls } = createFakeExecutionRunRepository({ data: deliveredRunData() });
       const { observe, calls: observeCalls } = createFakeObserve(pendingOutcomes);
       const { wait, calls: waitCalls } = createFakeWait();
 
@@ -281,13 +362,14 @@ describe("runDeliveryCiController", () => {
       expect(outcome).toEqual({ outcome: "exhausted", observationCount: 4 });
       expect(observeCalls).toHaveLength(4);
       expect(waitCalls).toEqual([500, 500, 500]);
+      expect(recordCiResultCalls).toHaveLength(0);
     });
   });
 
   describe("observation failure remains distinct from CI failure and is never retried", () => {
-    it("returns observation_failed for credential_unavailable, passing the credential reason through, without waiting or retrying", async () => {
+    it("returns observation_failed for credential_unavailable, passing the credential reason through, without waiting, retrying, or persisting a CI result", async () => {
       // Arrange
-      const { repository } = createFakeExecutionRunRepository({ data: deliveredRunData() });
+      const { repository, recordCiResultCalls } = createFakeExecutionRunRepository({ data: deliveredRunData() });
       const { observe, calls: observeCalls } = createFakeObserve([
         { ok: false, reason: "credential_unavailable", credentialReason: "config_invalid" },
       ]);
@@ -311,6 +393,7 @@ describe("runDeliveryCiController", () => {
       });
       expect(observeCalls).toHaveLength(1);
       expect(waitCalls).toHaveLength(0);
+      expect(recordCiResultCalls).toHaveLength(0);
     });
 
     it("returns observation_failed for runs_lookup_failed, passing the safe http status through", async () => {
@@ -382,7 +465,7 @@ describe("runDeliveryCiController", () => {
     it("returns observation_error and stops immediately when observe() itself throws unexpectedly, never retrying", async () => {
       // Arrange — a throw violates observe()'s typed never-rejects contract; the controller must
       // still fail safely rather than propagating an unhandled rejection.
-      const { repository } = createFakeExecutionRunRepository({ data: deliveredRunData() });
+      const { repository, recordCiResultCalls } = createFakeExecutionRunRepository({ data: deliveredRunData() });
       const throwingObserve: ObserveDeliveryCiStatus = async () => {
         throw new Error("unexpected failure inside observe()");
       };
@@ -400,6 +483,7 @@ describe("runDeliveryCiController", () => {
       // Assert
       expect(outcome).toEqual({ outcome: "observation_error", observationCount: 1 });
       expect(waitCalls).toHaveLength(0);
+      expect(recordCiResultCalls).toHaveLength(0);
     });
 
     it("terminates immediately on an observation failure that follows a prior pending observation, without waiting again or retrying", async () => {

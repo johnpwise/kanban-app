@@ -97,6 +97,12 @@ describeWithEmulator("runDeliveryCiController against the Firestore emulator", (
       observationCount: 1,
     });
     expect(calls).toEqual([{ repository: REPOSITORY, deliveryCommitSha: DELIVERY_COMMIT_SHA }]);
+    const data = (await firestore.collection("executionRuns").doc(executionRunId).get()).data();
+    expect(data?.status).toBe("ci_succeeded");
+    expect(data?.ci?.commitSha).toBe(DELIVERY_COMMIT_SHA);
+    expect(data?.ci?.state).toBe("succeeded");
+    expect(data?.ci?.runId).toBe(1);
+    expect(data?.ci?.recordedAt).toBeInstanceOf(Timestamp);
   });
 
   it("returns delivery_missing for a real persisted execution run that has not recorded a delivery yet", async () => {
