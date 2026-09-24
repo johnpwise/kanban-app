@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { acceptAdaExecutionRun, dispatchAdaExecutionRequest, launchAdaExecutionRun } from "./index";
+import {
+  acceptAdaExecutionRun,
+  dispatchAdaExecutionRequest,
+  launchAdaDeliveryCiControl,
+  launchAdaExecutionRun,
+} from "./index";
 import { dispatchTopicName } from "./onExecutionRequestCreated";
 
 describe("dispatchAdaExecutionRequest", () => {
@@ -45,6 +50,31 @@ describe("launchAdaExecutionRun", () => {
 
   it("should run as the SA granted permission to launch the ada-executor Cloud Run Job", () => {
     expect(launchAdaExecutionRun.__endpoint.serviceAccountEmail).toEqual(
+      "ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com",
+    );
+  });
+});
+
+describe("launchAdaDeliveryCiControl", () => {
+  it("should be an update trigger (not create) so it observes the delivery absent-to-present transition", () => {
+    expect(launchAdaDeliveryCiControl.__endpoint.eventTrigger?.eventType).toEqual(
+      "google.cloud.firestore.document.v1.updated",
+    );
+  });
+
+  it("should enable retries so a transient launch failure is redelivered instead of dropped", () => {
+    expect(launchAdaDeliveryCiControl.__endpoint.eventTrigger?.retry).toBe(true);
+  });
+
+  it("should stay bound to the executionRuns collection in europe-west2", () => {
+    expect(launchAdaDeliveryCiControl.__endpoint.eventTrigger?.eventFilterPathPatterns).toMatchObject({
+      document: "executionRuns/{executionRequestId}",
+    });
+    expect(launchAdaDeliveryCiControl.__endpoint.region).toEqual(["europe-west2"]);
+  });
+
+  it("should run as the SA granted permission to launch the ada-ci-controller Cloud Run Job", () => {
+    expect(launchAdaDeliveryCiControl.__endpoint.serviceAccountEmail).toEqual(
       "ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com",
     );
   });

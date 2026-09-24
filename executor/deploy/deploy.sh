@@ -18,6 +18,15 @@
 #   deploy.sh deploy-job       # create or update the Cloud Run Job to use the most recently built
 #                               # image (ADA_EXECUTION_RUN_ID/CODEX_MODEL/CODEX_REASONING_EFFORT are
 #                               # intentionally left unset here — supplied per execution instead)
+#   deploy.sh deploy-ci-controller-job
+#                               # create or update the separate ada-ci-controller Cloud Run Job:
+#                               # same image as deploy-job, overridden to run
+#                               # `node lib/ciControllerMain.js` instead of the image's default
+#                               # command. No CODEX_API_KEY secret is wired (this runtime never
+#                               # invokes Codex); the GitHub App private-key secret is reused.
+#                               # ADA_EXECUTION_RUN_ID is left unset here too — supplied per
+#                               # execution by the Functions launcher
+#                               # (functions/src/adaCiControllerJobLauncher.ts).
 #   deploy.sh execute <runId> <codexModel> [reasoningEffort]
 #                               # run the Job once, overriding ADA_EXECUTION_RUN_ID, CODEX_MODEL, and
 #                               # (if given) CODEX_REASONING_EFFORT for that execution only — the
@@ -33,7 +42,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXECUTOR_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 usage() {
-  echo "Usage: $0 {setup|build|deploy-job|execute <executionRunId> <codexModel> [reasoningEffort]}" >&2
+  echo "Usage: $0 {setup|build|deploy-job|deploy-ci-controller-job|execute <executionRunId> <codexModel> [reasoningEffort]}" >&2
 }
 
 # The only Codex models/effort levels currently approved for ADA executor runs. Extend these
@@ -43,7 +52,7 @@ ALLOWED_CODEX_MODELS=("gpt-5.6-luna" "gpt-5.6-terra")
 ALLOWED_CODEX_REASONING_EFFORTS=("low" "medium" "high")
 
 case "${1:-}" in
-setup | build | deploy-job | execute) ;;
+setup | build | deploy-job | deploy-ci-controller-job | execute) ;;
 *)
   usage
   exit 1
@@ -62,6 +71,7 @@ fi
 : "${ADA_ARTIFACT_REPO:?Set ADA_ARTIFACT_REPO (see config.env.example)}"
 : "${ADA_IMAGE_NAME:?Set ADA_IMAGE_NAME (see config.env.example)}"
 : "${ADA_JOB_NAME:?Set ADA_JOB_NAME (see config.env.example)}"
+: "${ADA_CI_JOB_NAME:?Set ADA_CI_JOB_NAME (see config.env.example)}"
 : "${ADA_RUNTIME_SERVICE_ACCOUNT:?Set ADA_RUNTIME_SERVICE_ACCOUNT (see config.env.example)}"
 : "${ADA_CODEX_API_KEY_SECRET:?Set ADA_CODEX_API_KEY_SECRET (see config.env.example)}"
 : "${ADA_GITHUB_APP_PRIVATE_KEY_SECRET:?Set ADA_GITHUB_APP_PRIVATE_KEY_SECRET (see config.env.example)}"
@@ -71,6 +81,7 @@ REGION="$ADA_GCP_REGION"
 ARTIFACT_REPO="$ADA_ARTIFACT_REPO"
 IMAGE_NAME="$ADA_IMAGE_NAME"
 JOB_NAME="$ADA_JOB_NAME"
+CI_JOB_NAME="$ADA_CI_JOB_NAME"
 RUNTIME_SA="$ADA_RUNTIME_SERVICE_ACCOUNT"
 CODEX_SECRET_NAME="$ADA_CODEX_API_KEY_SECRET"
 GITHUB_APP_PRIVATE_KEY_SECRET_NAME="$ADA_GITHUB_APP_PRIVATE_KEY_SECRET"
@@ -265,6 +276,60 @@ cmd_deploy_job() {
   echo "==> Job deployed."
 }
 
+cmd_deploy_ci_controller_job() {
+  require_cmd gcloud
+  local image
+  if [[ -f "$LAST_IMAGE_FILE" ]]; then
+    image="$(cat "$LAST_IMAGE_FILE")"
+  else
+    image="$(image_ref)"
+    echo "==> No recorded build from this session; assuming already-pushed image: $image"
+  fi
+
+  echo "==> Deploying (create-or-update) Cloud Run Job '$CI_JOB_NAME' in $REGION with image $image"
+  echo "    Same image as '$JOB_NAME', overridden to run 'node lib/ciControllerMain.js' instead of"
+  echo "    the image's default command — this runtime never invokes Codex, so no CODEX_API_KEY"
+  echo "    secret is wired here. ADA_EXECUTION_RUN_ID is intentionally NOT set here — it is"
+  echo "    supplied per execution by the Functions launcher (adaCiControllerJobLauncher.ts)."
+  echo "    ADA_GITHUB_APP_PRIVATE_KEY is populated from Secret Manager at container start"
+  echo "    (--set-secrets), reusing the same secret as '$JOB_NAME' — so the real key value never"
+  echo "    appears in this script, in config.env, in the Job's own plain env-var config, or in"
+  echo "    Cloud Logging."
+  echo "    --task-timeout=1800s (30 minutes): sized to safely contain the bounded observation"
+  echo "    policy in executor/src/ciControllerMain.ts (worst case ~27 minutes of idle waiting"
+  echo "    across 55 observations at a 30s delay, plus GitHub API round-trip time per attempt) —"
+  echo "    see that file's own comment for the full rationale against .github/workflows/ci.yml's"
+  echo "    typical job durations."
+
+  local deploy_args=(
+    "$CI_JOB_NAME"
+    --image="$image"
+    --command=node
+    --args=lib/ciControllerMain.js
+    --region="$REGION"
+    --project="$PROJECT_ID"
+    --tasks=1
+    --max-retries=0
+    --task-timeout=1800s
+    --service-account="$RUNTIME_SA"
+    --set-secrets="ADA_GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY_SECRET_NAME}:latest"
+  )
+
+  if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" ]]; then
+    echo "    ADA_GITHUB_APP_ID / ADA_GITHUB_APP_INSTALLATION_ID set from config (not secrets)."
+    deploy_args+=(--set-env-vars="ADA_GITHUB_APP_ID=${GITHUB_APP_ID},ADA_GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID}")
+  else
+    echo "    ADA_GITHUB_APP_ID / ADA_GITHUB_APP_INSTALLATION_ID not set — the GitHub App has not"
+    echo "    been created/installed yet (see 'GitHub App delivery credential' in deploy/README.md)."
+    echo "    Deploying without them: CI observation will fail safely (typed 'config_invalid'"
+    echo "    credential outcome) without blocking the rest of this deploy."
+  fi
+
+  gcloud run jobs deploy "${deploy_args[@]}"
+
+  echo "==> Job deployed."
+}
+
 contains_value() {
   local needle="$1"
   shift
@@ -312,5 +377,6 @@ case "$1" in
 setup) cmd_setup ;;
 build) cmd_build ;;
 deploy-job) cmd_deploy_job ;;
+deploy-ci-controller-job) cmd_deploy_ci_controller_job ;;
 execute) cmd_execute "${2:-}" "${3:-}" "${4:-}" ;;
 esac
