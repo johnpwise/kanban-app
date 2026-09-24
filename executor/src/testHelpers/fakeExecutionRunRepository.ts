@@ -1,4 +1,10 @@
-import type { ClaimExecutionRunOutcome, ExecutionRunRepository, RecordSourceRevisionOutcome } from "../executionRunRepository";
+import type {
+  ClaimExecutionRunOutcome,
+  DeliveryIdentity,
+  ExecutionRunRepository,
+  RecordDeliveryOutcome,
+  RecordSourceRevisionOutcome,
+} from "../executionRunRepository";
 
 export interface FakeExecutionRunRepositoryCall {
   executionRunId: string;
@@ -14,6 +20,11 @@ export interface FakeRecordSourceRevisionCall {
   headSha: string;
 }
 
+export interface FakeRecordDeliveryCall {
+  executionRunId: string;
+  delivery: DeliveryIdentity;
+}
+
 export function createFakeExecutionRunRepository(behavior: {
   data?: unknown;
   throwError?: Error;
@@ -21,19 +32,24 @@ export function createFakeExecutionRunRepository(behavior: {
   claimThrowError?: Error;
   recordSourceRevision?: RecordSourceRevisionOutcome;
   recordSourceRevisionThrowError?: Error;
+  recordDelivery?: RecordDeliveryOutcome;
+  recordDeliveryThrowError?: Error;
 }): {
   repository: ExecutionRunRepository;
   calls: FakeExecutionRunRepositoryCall[];
   claimCalls: FakeClaimExecutionRunCall[];
   recordSourceRevisionCalls: FakeRecordSourceRevisionCall[];
+  recordDeliveryCalls: FakeRecordDeliveryCall[];
 } {
   const calls: FakeExecutionRunRepositoryCall[] = [];
   const claimCalls: FakeClaimExecutionRunCall[] = [];
   const recordSourceRevisionCalls: FakeRecordSourceRevisionCall[] = [];
+  const recordDeliveryCalls: FakeRecordDeliveryCall[] = [];
   return {
     calls,
     claimCalls,
     recordSourceRevisionCalls,
+    recordDeliveryCalls,
     repository: {
       async loadExecutionRunData(executionRunId: string) {
         calls.push({ executionRunId });
@@ -55,6 +71,13 @@ export function createFakeExecutionRunRepository(behavior: {
           throw behavior.recordSourceRevisionThrowError;
         }
         return behavior.recordSourceRevision ?? { outcome: "created" };
+      },
+      async recordDelivery(executionRunId: string, delivery: DeliveryIdentity) {
+        recordDeliveryCalls.push({ executionRunId, delivery });
+        if (behavior.recordDeliveryThrowError) {
+          throw behavior.recordDeliveryThrowError;
+        }
+        return behavior.recordDelivery ?? { outcome: "created" };
       },
     },
   };

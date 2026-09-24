@@ -9,6 +9,19 @@ export type ClaimExecutionRunOutcome = { claimed: true } | { claimed: false; rea
 
 export type RecordSourceRevisionOutcome = { outcome: "created" } | { outcome: "already_recorded" } | { outcome: "conflict" };
 
+export type RecordDeliveryOutcome = { outcome: "created" } | { outcome: "already_recorded" } | { outcome: "conflict" };
+
+export interface DeliveryPullRequestIdentity {
+  number: number;
+  htmlUrl: string;
+}
+
+export interface DeliveryIdentity {
+  branch: string;
+  commitSha: string;
+  pullRequest?: DeliveryPullRequestIdentity;
+}
+
 export interface ExecutionRunRepository {
   /** Returns the raw document data, or `undefined` if no such document exists. Never writes. */
   loadExecutionRunData(executionRunId: string): Promise<unknown | undefined>;
@@ -34,6 +47,19 @@ export interface ExecutionRunRepository {
    * inside a single Firestore transaction, same as `claimExecutionRun`.
    */
   recordSourceRevision(executionRunId: string, headSha: string): Promise<RecordSourceRevisionOutcome>;
+  /**
+   * Durably records ADA's independently-verified GitHub delivery on `executionRuns/{executionRunId}`:
+   * if no `delivery` is present yet, sets `{ branch, commitSha, recordedAt, pullRequest? }` and
+   * returns `{ outcome: "created" }`; if one is already present with the same `branch` and
+   * `commitSha` (this call or a concurrent one committed first), returns
+   * `{ outcome: "already_recorded" }` without writing — an already-recorded `pullRequest` is never
+   * overwritten by a later call, even one supplying different/no `pullRequest` data; if one is
+   * already present with a *different* `branch` or `commitSha`, returns `{ outcome: "conflict" }`
+   * without writing. A missing document at write time is treated the same as a conflict, mirroring
+   * `recordSourceRevision`. Read-check-write happens inside a single Firestore transaction, same as
+   * `recordSourceRevision`.
+   */
+  recordDelivery(executionRunId: string, delivery: DeliveryIdentity): Promise<RecordDeliveryOutcome>;
 }
 
 let firestore: Firestore | undefined;
@@ -101,6 +127,37 @@ export function createFirestoreExecutionRunRepository(): ExecutionRunRepository 
           return { outcome: "created" };
         }
         if (existingSourceRevision.headSha === headSha) {
+          return { outcome: "already_recorded" };
+        }
+        return { outcome: "conflict" };
+      });
+    },
+
+    async recordDelivery(executionRunId: string, delivery: DeliveryIdentity) {
+      const firestore = getExecutionRunFirestore();
+      const docRef = firestore.collection(EXECUTION_RUNS_COLLECTION).doc(executionRunId);
+
+      return firestore.runTransaction<RecordDeliveryOutcome>(async (transaction) => {
+        const snapshot = await transaction.get(docRef);
+        const existingDelivery = (
+          snapshot.data() as { delivery?: { branch?: unknown; commitSha?: unknown } } | undefined
+        )?.delivery;
+
+        if (!snapshot.exists) {
+          return { outcome: "conflict" };
+        }
+        if (!existingDelivery) {
+          transaction.update(docRef, {
+            delivery: {
+              branch: delivery.branch,
+              commitSha: delivery.commitSha,
+              recordedAt: FieldValue.serverTimestamp(),
+              ...(delivery.pullRequest ? { pullRequest: delivery.pullRequest } : {}),
+            },
+          });
+          return { outcome: "created" };
+        }
+        if (existingDelivery.branch === delivery.branch && existingDelivery.commitSha === delivery.commitSha) {
           return { outcome: "already_recorded" };
         }
         return { outcome: "conflict" };

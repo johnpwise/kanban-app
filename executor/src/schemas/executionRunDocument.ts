@@ -62,6 +62,23 @@ const executionRunSourceRevisionSchema = z.object({
   resolvedAt: z.instanceof(Timestamp),
 });
 
+const executionRunDeliveryPullRequestSchema = z.object({
+  number: z.number(),
+  htmlUrl: z.string(),
+});
+
+/**
+ * The durable, independently-verified delivery record written by `recordDelivery` once ADA's
+ * GitHub push is confirmed (see `executionRunRepository.ts`). Executor-only, like `claim` /
+ * `sourceRevision` — not modelled on the Functions side.
+ */
+const executionRunDeliverySchema = z.object({
+  branch: z.string().min(1),
+  commitSha: z.string().min(1),
+  recordedAt: z.instanceof(Timestamp),
+  pullRequest: executionRunDeliveryPullRequestSchema.optional(),
+});
+
 /** Shape of an `executionRuns/{executionRequestId}` Firestore document's data. */
 const executionRunDocumentSchema = z.object({
   executionRequestId: z.string().min(1),
@@ -74,6 +91,7 @@ const executionRunDocumentSchema = z.object({
   input: executionRunInputSchema,
   claim: executionRunClaimSchema.optional(),
   sourceRevision: executionRunSourceRevisionSchema.optional(),
+  delivery: executionRunDeliverySchema.optional(),
 });
 
 export type ExecutionRunInput = z.infer<typeof executionRunInputSchema>;

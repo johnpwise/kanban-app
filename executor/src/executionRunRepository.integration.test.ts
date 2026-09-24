@@ -167,3 +167,147 @@ describeWithEmulator(
     });
   },
 );
+
+describeWithEmulator(
+  "createFirestoreExecutionRunRepository().recordDelivery against the Firestore emulator",
+  () => {
+    const projectId = process.env.GCLOUD_PROJECT ?? "demo-kanban-app-test";
+    const app = initializeApp({ projectId }, `executor-delivery-repository-integration-${randomUUID()}`);
+    const firestore = getFirestore(app);
+    const branch = "ada/req-1";
+    const commitSha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+    const otherCommitSha = "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff";
+
+    beforeAll(() => {
+      expect(firestoreEmulatorHost).toMatch(/^127\.0\.0\.1:\d+$/);
+    });
+
+    afterAll(async () => {
+      await deleteApp(app);
+    });
+
+    it("records the verified delivery on a run with no existing delivery", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+
+      // Act
+      const outcome = await repository.recordDelivery(executionRunId, { branch, commitSha });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.delivery?.branch).toBe(branch);
+      expect(data?.delivery?.commitSha).toBe(commitSha);
+      expect(data?.delivery?.recordedAt).toBeInstanceOf(Timestamp);
+      expect(data?.delivery?.pullRequest).toBeUndefined();
+    });
+
+    it("records the verified delivery together with a successful pull request identity", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      const pullRequest = { number: 42, htmlUrl: "https://github.com/johnpwise/kanban-app/pull/42" };
+
+      // Act
+      const outcome = await repository.recordDelivery(executionRunId, { branch, commitSha, pullRequest });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.delivery?.pullRequest).toEqual(pullRequest);
+    });
+
+    it("idempotently accepts recording the exact same branch and commit SHA that is already persisted", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordDelivery(executionRunId, { branch, commitSha });
+      const firstRecordedAt = (await docRef.get()).data()?.delivery?.recordedAt;
+
+      // Act
+      const outcome = await repository.recordDelivery(executionRunId, { branch, commitSha });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "already_recorded" });
+      const data = (await docRef.get()).data();
+      expect(data?.delivery?.recordedAt).toEqual(firstRecordedAt);
+    });
+
+    it("refuses to overwrite a conflicting already-persisted delivery branch", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordDelivery(executionRunId, { branch, commitSha });
+
+      // Act
+      const outcome = await repository.recordDelivery(executionRunId, { branch: "ada/req-2", commitSha });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.delivery?.branch).toBe(branch);
+    });
+
+    it("refuses to overwrite a conflicting already-persisted delivery commit SHA", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordDelivery(executionRunId, { branch, commitSha });
+
+      // Act
+      const outcome = await repository.recordDelivery(executionRunId, { branch, commitSha: otherCommitSha });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.delivery?.commitSha).toBe(commitSha);
+    });
+
+    it("treats a missing execution run at write time as a conflict and creates no delivery state", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      const repository = createFirestoreExecutionRunRepository();
+
+      // Act
+      const outcome = await repository.recordDelivery(executionRunId, { branch, commitSha });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const snapshot = await docRef.get();
+      expect(snapshot.exists).toBe(false);
+    });
+
+    it("given many concurrent recordings of the same delivery identity, exactly one create is persisted and the rest are idempotent", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      const attemptCount = 5;
+
+      // Act
+      const outcomes = await Promise.all(
+        Array.from({ length: attemptCount }, () => repository.recordDelivery(executionRunId, { branch, commitSha })),
+      );
+
+      // Assert
+      expect(outcomes.filter((outcome) => outcome.outcome === "created")).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome.outcome === "already_recorded")).toHaveLength(attemptCount - 1);
+      const data = (await docRef.get()).data();
+      expect(data?.delivery?.branch).toBe(branch);
+      expect(data?.delivery?.commitSha).toBe(commitSha);
+    });
+  },
+);
