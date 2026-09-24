@@ -1,0 +1,1 @@
+ADA CI-controller live E2E validation marker — safe to delete.
