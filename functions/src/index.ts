@@ -1,9 +1,11 @@
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onMessagePublished } from "firebase-functions/v2/pubsub";
 import * as logger from "firebase-functions/logger";
 
+import { launchAdaCiControllerJob, launchAdaCiControllerJobInEmulator } from "./adaCiControllerJobLauncher";
 import { launchAdaExecutorJob, launchAdaExecutorJobInEmulator } from "./adaExecutorJobLauncher";
 import { createFirestoreExecutionRunTransaction } from "./firestoreExecutionRunTransaction";
+import { launchDeliveryCiControl } from "./launchDeliveryCiControl";
 import { launchExecutionRun } from "./launchExecutionRun";
 import { handleAdaExecutionRequestPublished } from "./onAdaExecutionRequestPublished";
 import { dispatchTopicName, handleExecutionRequestCreated } from "./onExecutionRequestCreated";
@@ -82,6 +84,48 @@ export const launchAdaExecutionRun = onDocumentCreated(
       // written to by unrelated emulator-backed integration tests for the Pub/Sub consumer, and
       // those writes must never reach the real Cloud Run Admin API.
       launchJob: process.env.FUNCTIONS_EMULATOR === "true" ? launchAdaExecutorJobInEmulator : launchAdaExecutorJob,
+      logger,
+    });
+  },
+);
+
+/**
+ * Separate again from both triggers above: this one observes the *update* that follows a
+ * successful ADA delivery (`delivery` becoming present on an already-`accepted` run) and launches
+ * the separate `ada-ci-controller` Job — the coding executor itself never waits for CI (see
+ * `executor/src/runExecutor.ts`; it exits immediately after `recordDelivery`). Most updates on this
+ * document are not that transition (`claim`, `sourceRevision`, and later `ci` writes all pass
+ * through the same trigger); `launchDeliveryCiControl` fails closed to a no-launch skip for all of
+ * them via `isDeliveryEligibleForCiControl`. Region matches the other triggers for the same reason
+ * (co-located with the Firestore database they read from).
+ */
+export const launchAdaDeliveryCiControl = onDocumentUpdated(
+  {
+    document: "executionRuns/{executionRequestId}",
+    region: "europe-west2",
+    // A transient Cloud Run API failure is rethrown by launchDeliveryCiControl so Firebase retries
+    // the event; redelivery is safe even though it is not a genuine eligibility re-check — a
+    // redelivered launch converges on the same durable `(commitSha, state)` idempotency contract in
+    // `recordCiResult`, not a new dedup mechanism here.
+    // https://firebase.google.com/docs/functions/retries
+    retry: true,
+    // Must run as the SA granted `roles/run.jobsExecutorWithOverrides` on the `ada-ci-controller`
+    // Cloud Run Job. Reuses the same `ada-launcher-runtime` identity as `launchAdaExecutionRun`
+    // above; granting it that additional binding on the new Job is a live IAM mutation, deferred to
+    // an explicit approval boundary (not performed by this code change).
+    serviceAccount: "ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com",
+  },
+  async (event) => {
+    await launchDeliveryCiControl({
+      documentId: event.params.executionRequestId,
+      before: event.data?.before.data(),
+      after: event.data?.after.data(),
+      eventId: event.id,
+      // Same emulator guard as launchAdaExecutionRun above, and for the same reason: emulator-backed
+      // integration tests write to executionRuns/{id} directly and must never reach the real Cloud
+      // Run Admin API.
+      launchJob:
+        process.env.FUNCTIONS_EMULATOR === "true" ? launchAdaCiControllerJobInEmulator : launchAdaCiControllerJob,
       logger,
     });
   },
