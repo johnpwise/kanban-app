@@ -121,6 +121,30 @@ Firestore, and has no Cloud Run/IAM/Artifact Registry permissions on itself. Clo
 default service account is granted nothing beyond write access to this one Artifact Registry
 repository — not the broad project Editor role GCP used to grant it automatically.
 
+## Firestore-trigger Cloud Functions need their own `run.invoker` binding
+
+Not related to this script, but discovered live while validating `launchAdaDeliveryCiControl`
+(`functions/src/index.ts`), so recorded here since it will recur for any future 2nd-gen
+Eventarc/Firestore-triggered Cloud Function in this project: `firebase deploy` does **not**
+automatically grant the trigger's own service account `roles/run.invoker` on the Function's
+underlying Cloud Run service. Without it, Eventarc's delivery attempts fail closed with `The
+request was not authenticated ... IAM principal lacks {run.routes.invoke} permission`, visible only
+in the Cloud Run service's own request logs (`gcloud functions logs read <fn> --gen2` surfaces
+these as `WARNING` lines) — the function's own code never runs, so its own logging never appears
+either. `launchAdaExecutionRun` already carried this binding (granted manually at some undocumented
+earlier point); `launchAdaDeliveryCiControl` did not, and needed it granted explicitly:
+
+```sh
+gcloud run services add-iam-policy-binding <function-name-lowercased> \
+  --region=europe-west2 --project=kanban-app-fa4b7 \
+  --member=serviceAccount:ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com \
+  --role=roles/run.invoker
+```
+
+Check for this after deploying any new Firestore-triggered function:
+`gcloud run services get-iam-policy <function-name-lowercased> --region=europe-west2` — an empty
+policy means it's missing.
+
 ## Runtime permission history
 
 - **Through the executor-shell increment** (`.agent-workflows/ada-cloud-run-executor-shell`): the
