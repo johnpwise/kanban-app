@@ -5,24 +5,24 @@ import { AdaCodexModelConfigError, parseAdaCodexModelConfig } from "./adaCodexMo
 describe("parseAdaCodexModelConfig", () => {
   it("accepts an approved model with no reasoning effort configured", () => {
     // Arrange
-    const input = { codexModel: "gpt-5_6-luna", codexReasoningEffort: "" };
+    const input = { codexModel: "gpt-5.6-luna", codexReasoningEffort: "" };
 
     // Act
     const result = parseAdaCodexModelConfig(input);
 
     // Assert
-    expect(result).toEqual({ codexModel: "gpt-5_6-luna", codexReasoningEffort: undefined });
+    expect(result).toEqual({ codexModel: "gpt-5.6-luna", codexReasoningEffort: undefined });
   });
 
   it("accepts an approved model with an approved reasoning effort configured", () => {
     // Arrange
-    const input = { codexModel: "gpt-5_6-terra", codexReasoningEffort: "high" };
+    const input = { codexModel: "gpt-5.6-terra", codexReasoningEffort: "high" };
 
     // Act
     const result = parseAdaCodexModelConfig(input);
 
     // Assert
-    expect(result).toEqual({ codexModel: "gpt-5_6-terra", codexReasoningEffort: "high" });
+    expect(result).toEqual({ codexModel: "gpt-5.6-terra", codexReasoningEffort: "high" });
   });
 
   it("rejects a missing/undefined model", () => {
@@ -49,7 +49,7 @@ describe("parseAdaCodexModelConfig", () => {
 
   it("rejects a model outside the approved allow-list", () => {
     // Arrange
-    const input = { codexModel: "gpt-5_6-nova", codexReasoningEffort: "" };
+    const input = { codexModel: "gpt-5.6-nova", codexReasoningEffort: "" };
 
     // Act
     const act = () => parseAdaCodexModelConfig(input);
@@ -60,7 +60,7 @@ describe("parseAdaCodexModelConfig", () => {
 
   it("rejects a reasoning effort outside the approved allow-list", () => {
     // Arrange
-    const input = { codexModel: "gpt-5_6-luna", codexReasoningEffort: "ultra" };
+    const input = { codexModel: "gpt-5.6-luna", codexReasoningEffort: "ultra" };
 
     // Act
     const act = () => parseAdaCodexModelConfig(input);

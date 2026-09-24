@@ -24,7 +24,7 @@ describe("launchAdaExecutorJob", () => {
     vi.stubEnv("ADA_GCP_PROJECT_ID", "kanban-app-fa4b7");
     vi.stubEnv("ADA_GCP_REGION", "europe-west2");
     vi.stubEnv("ADA_JOB_NAME", "ada-executor");
-    vi.stubEnv("ADA_CODEX_MODEL", "gpt-5_6-luna");
+    vi.stubEnv("ADA_CODEX_MODEL", "gpt-5.6-luna");
     vi.stubEnv("ADA_CODEX_REASONING_EFFORT", "");
   });
 
@@ -46,7 +46,7 @@ describe("launchAdaExecutorJob", () => {
           {
             env: [
               { name: "ADA_EXECUTION_RUN_ID", value: "req-1" },
-              { name: "CODEX_MODEL", value: "gpt-5_6-luna" },
+              { name: "CODEX_MODEL", value: "gpt-5.6-luna" },
             ],
           },
         ],
@@ -67,7 +67,7 @@ describe("launchAdaExecutorJob", () => {
           {
             env: [
               { name: "ADA_EXECUTION_RUN_ID", value: "req-1" },
-              { name: "CODEX_MODEL", value: "gpt-5_6-luna" },
+              { name: "CODEX_MODEL", value: "gpt-5.6-luna" },
               { name: "CODEX_REASONING_EFFORT", value: "high" },
             ],
           },
@@ -99,7 +99,7 @@ describe("launchAdaExecutorJob", () => {
   });
 
   it("fails closed on an unapproved CODEX_MODEL without calling the Cloud Run Admin API", async () => {
-    vi.stubEnv("ADA_CODEX_MODEL", "gpt-5_6-nova");
+    vi.stubEnv("ADA_CODEX_MODEL", "gpt-5.6-nova");
 
     await expect(launchAdaExecutorJob({ executionRequestId: "req-5" })).rejects.toThrow(AdaCodexModelConfigError);
 

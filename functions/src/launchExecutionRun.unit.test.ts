@@ -192,7 +192,7 @@ describe("launchExecutionRun", () => {
   it("classifies a fail-closed Codex model configuration error as invalid-configuration and acknowledges without retry", async () => {
     const launchJob: LaunchAdaExecutorJob = vi
       .fn()
-      .mockRejectedValue(new AdaCodexModelConfigError("CODEX_MODEL must be one of: gpt-5_6-luna, gpt-5_6-terra."));
+      .mockRejectedValue(new AdaCodexModelConfigError("CODEX_MODEL must be one of: gpt-5.6-luna, gpt-5.6-terra."));
     const logger = fakeLogger();
 
     await launchExecutionRun({
@@ -212,7 +212,7 @@ describe("launchExecutionRun", () => {
   it("never logs a Codex model configuration error's message (may echo the rejected value, kept out of structured log fields)", async () => {
     const launchJob: LaunchAdaExecutorJob = vi
       .fn()
-      .mockRejectedValue(new AdaCodexModelConfigError("CODEX_MODEL must be one of: gpt-5_6-luna, gpt-5_6-terra."));
+      .mockRejectedValue(new AdaCodexModelConfigError("CODEX_MODEL must be one of: gpt-5.6-luna, gpt-5.6-terra."));
     const logger = fakeLogger();
 
     await launchExecutionRun({
