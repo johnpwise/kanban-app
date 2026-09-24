@@ -1,7 +1,9 @@
 import type {
+  CiResult,
   ClaimExecutionRunOutcome,
   DeliveryIdentity,
   ExecutionRunRepository,
+  RecordCiResultOutcome,
   RecordDeliveryOutcome,
   RecordSourceRevisionOutcome,
 } from "../executionRunRepository";
@@ -25,6 +27,11 @@ export interface FakeRecordDeliveryCall {
   delivery: DeliveryIdentity;
 }
 
+export interface FakeRecordCiResultCall {
+  executionRunId: string;
+  result: CiResult;
+}
+
 export function createFakeExecutionRunRepository(behavior: {
   data?: unknown;
   throwError?: Error;
@@ -34,22 +41,27 @@ export function createFakeExecutionRunRepository(behavior: {
   recordSourceRevisionThrowError?: Error;
   recordDelivery?: RecordDeliveryOutcome;
   recordDeliveryThrowError?: Error;
+  recordCiResult?: RecordCiResultOutcome;
+  recordCiResultThrowError?: Error;
 }): {
   repository: ExecutionRunRepository;
   calls: FakeExecutionRunRepositoryCall[];
   claimCalls: FakeClaimExecutionRunCall[];
   recordSourceRevisionCalls: FakeRecordSourceRevisionCall[];
   recordDeliveryCalls: FakeRecordDeliveryCall[];
+  recordCiResultCalls: FakeRecordCiResultCall[];
 } {
   const calls: FakeExecutionRunRepositoryCall[] = [];
   const claimCalls: FakeClaimExecutionRunCall[] = [];
   const recordSourceRevisionCalls: FakeRecordSourceRevisionCall[] = [];
   const recordDeliveryCalls: FakeRecordDeliveryCall[] = [];
+  const recordCiResultCalls: FakeRecordCiResultCall[] = [];
   return {
     calls,
     claimCalls,
     recordSourceRevisionCalls,
     recordDeliveryCalls,
+    recordCiResultCalls,
     repository: {
       async loadExecutionRunData(executionRunId: string) {
         calls.push({ executionRunId });
@@ -78,6 +90,13 @@ export function createFakeExecutionRunRepository(behavior: {
           throw behavior.recordDeliveryThrowError;
         }
         return behavior.recordDelivery ?? { outcome: "created" };
+      },
+      async recordCiResult(executionRunId: string, result: CiResult) {
+        recordCiResultCalls.push({ executionRunId, result });
+        if (behavior.recordCiResultThrowError) {
+          throw behavior.recordCiResultThrowError;
+        }
+        return behavior.recordCiResult ?? { outcome: "created" };
       },
     },
   };

@@ -311,3 +311,155 @@ describeWithEmulator(
     });
   },
 );
+
+describeWithEmulator(
+  "createFirestoreExecutionRunRepository().recordCiResult against the Firestore emulator",
+  () => {
+    const projectId = process.env.GCLOUD_PROJECT ?? "demo-kanban-app-test";
+    const app = initializeApp({ projectId }, `executor-ci-result-repository-integration-${randomUUID()}`);
+    const firestore = getFirestore(app);
+    const commitSha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefe";
+    const otherCommitSha = "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffe";
+    const succeeded = { commitSha, state: "succeeded" as const, runId: 1, htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/1" };
+    const failed = { commitSha, state: "failed" as const, runId: 2, htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/2", conclusion: "failure" };
+
+    beforeAll(() => {
+      expect(firestoreEmulatorHost).toMatch(/^127\.0\.0\.1:\d+$/);
+    });
+
+    afterAll(async () => {
+      await deleteApp(app);
+    });
+
+    it("records a successful CI result together with the ci_succeeded lifecycle status, atomically", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+
+      // Act
+      const outcome = await repository.recordCiResult(executionRunId, succeeded);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.status).toBe("ci_succeeded");
+      expect(data?.ci?.commitSha).toBe(commitSha);
+      expect(data?.ci?.state).toBe("succeeded");
+      expect(data?.ci?.runId).toBe(1);
+      expect(data?.ci?.htmlUrl).toBe(succeeded.htmlUrl);
+      expect(data?.ci?.conclusion).toBeUndefined();
+      expect(data?.ci?.recordedAt).toBeInstanceOf(Timestamp);
+    });
+
+    it("records a failed CI result together with the ci_failed lifecycle status, atomically", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+
+      // Act
+      const outcome = await repository.recordCiResult(executionRunId, failed);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.status).toBe("ci_failed");
+      expect(data?.ci?.state).toBe("failed");
+      expect(data?.ci?.conclusion).toBe("failure");
+    });
+
+    it("idempotently accepts recording the exact same commit SHA and terminal state that is already persisted", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordCiResult(executionRunId, succeeded);
+      const firstRecordedAt = (await docRef.get()).data()?.ci?.recordedAt;
+
+      // Act
+      const outcome = await repository.recordCiResult(executionRunId, succeeded);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "already_recorded" });
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.recordedAt).toEqual(firstRecordedAt);
+      expect(data?.status).toBe("ci_succeeded");
+    });
+
+    it("refuses to overwrite an already-persisted CI result for a conflicting commit SHA", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordCiResult(executionRunId, succeeded);
+
+      // Act
+      const outcome = await repository.recordCiResult(executionRunId, { ...succeeded, commitSha: otherCommitSha });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.commitSha).toBe(commitSha);
+      expect(data?.status).toBe("ci_succeeded");
+    });
+
+    it("refuses to overwrite an already-persisted CI result with a conflicting terminal state for the same commit SHA", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordCiResult(executionRunId, succeeded);
+
+      // Act
+      const outcome = await repository.recordCiResult(executionRunId, failed);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.state).toBe("succeeded");
+      expect(data?.status).toBe("ci_succeeded");
+    });
+
+    it("treats a missing execution run at write time as a conflict and creates no CI state", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      const repository = createFirestoreExecutionRunRepository();
+
+      // Act
+      const outcome = await repository.recordCiResult(executionRunId, succeeded);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const snapshot = await docRef.get();
+      expect(snapshot.exists).toBe(false);
+    });
+
+    it("given many concurrent recordings of the same CI result, exactly one create is persisted and the rest are idempotent", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+      const attemptCount = 5;
+
+      // Act
+      const outcomes = await Promise.all(
+        Array.from({ length: attemptCount }, () => repository.recordCiResult(executionRunId, succeeded)),
+      );
+
+      // Assert
+      expect(outcomes.filter((outcome) => outcome.outcome === "created")).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome.outcome === "already_recorded")).toHaveLength(attemptCount - 1);
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.commitSha).toBe(commitSha);
+      expect(data?.status).toBe("ci_succeeded");
+    });
+  },
+);
