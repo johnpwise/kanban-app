@@ -15,6 +15,20 @@ Firestore first. New Execution Run statuses, Firestore writes from the executor,
 changes remain out of scope for this deploy tooling — see the root [`AGENTS.md`](../../AGENTS.md) /
 project ADA history for that boundary.
 
+**Automatic launches also supply `CODEX_MODEL` and, when configured, `CODEX_REASONING_EFFORT`** as
+the same kind of per-execution `containerOverrides` this file's `execute` uses — never a stored
+Job-definition value. The automatic launcher (`functions/src/adaExecutorJobLauncher.ts`) reads and
+validates them from two Firebase Functions params, `ADA_CODEX_MODEL` and `ADA_CODEX_REASONING_EFFORT`
+(`functions/src/adaExecutorRunLauncherConfig.ts`, alongside the existing `ADA_GCP_PROJECT_ID` /
+`ADA_GCP_REGION` / `ADA_JOB_NAME` params), against the same currently-approved allow-lists as
+`ALLOWED_CODEX_MODELS` / `ALLOWED_CODEX_REASONING_EFFORTS` below
+(`functions/src/adaCodexModelPolicy.ts` — kept as a small explicit duplicate of this script's arrays,
+not a shared package). `ADA_CODEX_MODEL` has no default: an unset or unapproved value fails the
+launch closed (classified `invalid-configuration`, acknowledged, not retried) rather than launching
+the Job without a model. Setting a real value for `ADA_CODEX_MODEL` (and optionally
+`ADA_CODEX_REASONING_EFFORT`) in the Functions deploy environment — and redeploying
+`launchAdaExecutionRun` — is a separate, explicit operational step this script does not perform.
+
 ## What this is
 
 - `deploy.sh` — one script, four subcommands, each idempotent (safe to re-run):
