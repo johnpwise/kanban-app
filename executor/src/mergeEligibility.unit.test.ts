@@ -93,6 +93,7 @@ describe("evaluateMergeEligibility", () => {
     expect(result).toEqual({
       eligible: true,
       executionRunId: EXECUTION_RUN_ID,
+      repository: REPOSITORY,
       commitSha: DELIVERY_COMMIT_SHA,
       pullRequestNumber: PULL_REQUEST_NUMBER,
     });
