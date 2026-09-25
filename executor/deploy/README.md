@@ -60,6 +60,26 @@ the Job without a model. Setting a real value for `ADA_CODEX_MODEL` (and optiona
     (`functions/src/adaCiControllerJobLauncher.ts`). **Provisioning this Job, and granting the
     `ada-launcher-runtime` Function identity `roles/run.jobsExecutorWithOverrides` on it, are live
     GCP mutations gated behind explicit approval — not performed by writing this script.**
+  - `deploy-merge-controller-job` — create or update a **separate** Cloud Run Job
+    (`ada-merge-controller` by default, `ADA_MERGE_JOB_NAME`) that runs the same image as
+    `deploy-job`, overridden via `--command=node --args=lib/mergeControllerMain.js` to run the
+    merge-controller entry point instead of the image's default `lib/main.js`. This is the
+    asynchronous stage that re-verifies merge eligibility against fresh GitHub state for an
+    already-`ci_succeeded` delivery and performs the guarded one-shot merge (see
+    `executor/src/mergeControllerMain.ts`, `executor/src/mergeEligibility.ts`,
+    `executor/src/mergeExecution.ts`, and `executor/src/mergeCompletionController.ts`); it never
+    invokes Codex, so no `CODEX_API_KEY` secret is wired. Reuses the same runtime service account
+    and the same `ADA_GITHUB_APP_PRIVATE_KEY` secret as `deploy-job` — no new secret or runtime-SA
+    IAM binding is required for the Job's own execution identity. Sets `--task-timeout=120s`, sized
+    against `mergeControllerMain.ts`'s bounded `mergeability_pending` retry policy (10 attempts at a
+    3s delay — GitHub's own mergeability computation is a near-instant internal operation, not an
+    external CI pipeline, so this bound is deliberately much smaller than the CI-controller's) — see
+    that file's own comment for the exact rationale. Like `deploy-job`, never sets
+    `ADA_EXECUTION_RUN_ID` on the Job's persistent definition; it is supplied per execution by the
+    Functions launcher (`functions/src/adaMergeControllerJobLauncher.ts`). **Provisioning this Job,
+    and granting the `ada-launcher-runtime` Function identity `roles/run.jobsExecutorWithOverrides`
+    on it, are live GCP mutations gated behind explicit approval — not performed by writing this
+    script.**
   - `execute <executionRunId> <codexModel> [reasoningEffort]` — run the Job once, supplying
     `ADA_EXECUTION_RUN_ID`, `CODEX_MODEL`, and (if given) `CODEX_REASONING_EFFORT` as a
     per-execution override (`--update-env-vars` on `gcloud run jobs execute`). `codexModel` must be
@@ -94,7 +114,7 @@ A checked-in script matches the "smallest maintainable mechanism" bar; introduci
 four resources would be a disproportionate new toolchain. Revisit if/when ADA's infrastructure
 footprint grows enough to need drift detection or multi-environment state.
 
-## Resources this creates (on `setup` / `build` / `deploy-job` / `deploy-ci-controller-job`)
+## Resources this creates (on `setup` / `build` / `deploy-job` / `deploy-ci-controller-job` / `deploy-merge-controller-job`)
 
 | Resource | Name | Notes |
 | --- | --- | --- |
@@ -109,12 +129,15 @@ footprint grows enough to need drift detection or multi-environment state.
 | IAM binding | `roles/secretmanager.secretAccessor` on the above secret, scoped to that one secret only (not project-wide) | granted to the runtime SA so the Job can resolve `ADA_GITHUB_APP_PRIVATE_KEY` at container start |
 | Cloud Run Job | `ada-executor` | region `europe-west2`, 1 task, `max-retries=0`, runtime SA above, no persistent `ADA_EXECUTION_RUN_ID`, `CODEX_API_KEY` and `ADA_GITHUB_APP_PRIVATE_KEY` sourced from their Secret Manager secrets via `--set-secrets`, `ADA_GITHUB_APP_ID`/`ADA_GITHUB_APP_INSTALLATION_ID` set as plain env vars only once configured |
 | Cloud Run Job | `ada-ci-controller` (configurable via `ADA_CI_JOB_NAME`), created only by `deploy-ci-controller-job` | region `europe-west2`, 1 task, `max-retries=0`, `--task-timeout=1800s`, **same** runtime SA as `ada-executor` (no new SA), command overridden to `node lib/ciControllerMain.js`, only `ADA_GITHUB_APP_PRIVATE_KEY` sourced via `--set-secrets` (no `CODEX_API_KEY`), no persistent `ADA_EXECUTION_RUN_ID` |
+| Cloud Run Job | `ada-merge-controller` (configurable via `ADA_MERGE_JOB_NAME`), created only by `deploy-merge-controller-job` | region `europe-west2`, 1 task, `max-retries=0`, `--task-timeout=120s`, **same** runtime SA as `ada-executor` (no new SA), command overridden to `node lib/mergeControllerMain.js`, only `ADA_GITHUB_APP_PRIVATE_KEY` sourced via `--set-secrets` (no `CODEX_API_KEY`), no persistent `ADA_EXECUTION_RUN_ID` |
 
 Not yet created by this script, and gated behind a separate explicit approval: an IAM binding
 granting the `ada-launcher-runtime` Function identity `roles/run.jobsExecutorWithOverrides` on the
-`ada-ci-controller` Job specifically (Cloud Run Job IAM bindings are per-resource, so the existing
-binding on `ada-executor` does not cover it) — see
-`.agent-workflows/ci-controller-lifecycle-handoff/plan.md`'s approval boundaries.
+`ada-ci-controller` Job specifically, and the equivalent binding on the `ada-merge-controller` Job
+(Cloud Run Job IAM bindings are per-resource, so the existing binding on `ada-executor` does not
+cover either) — see `.agent-workflows/ci-controller-lifecycle-handoff/plan.md`'s approval
+boundaries for the CI-controller precedent; the merge-controller binding follows the identical
+pattern.
 
 No other roles are granted to the runtime service account. It cannot call other GCP APIs beyond
 Firestore, and has no Cloud Run/IAM/Artifact Registry permissions on itself. Cloud Build's own
