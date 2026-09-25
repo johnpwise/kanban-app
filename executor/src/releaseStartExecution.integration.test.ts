@@ -97,6 +97,8 @@ describe("executeEligibleReleaseStart against real local git (source clone + bar
       releaseIntentId: "release-intent-1",
       repository: PLACEHOLDER_REPOSITORY,
       version: "1.4.0",
+      sourceBranch: "develop",
+      sourceRevision: source.headSha,
       releaseBranch: "release/1.4.0",
       commitSha: result.commitSha,
       remoteSha: result.commitSha,

@@ -150,9 +150,19 @@ describe("executeEligibleReleaseStart", () => {
     expect(workspaceCalls).toBe(0);
   });
 
-  it("returns a distinct idempotent already_started outcome, with no workspace mutation, for the already-started repeat-invocation path", async () => {
+  it("returns a distinct idempotent already_started outcome carrying the full trusted recovered identity, with no workspace mutation, for the already-started repeat-invocation path", async () => {
     // Arrange
-    const alreadyStarted: ReleaseEligibilityOutcome = { eligible: false, reason: "already_started", releaseBranch: RELEASE_BRANCH, headSha: COMMIT_SHA };
+    const alreadyStarted: ReleaseEligibilityOutcome = {
+      eligible: false,
+      reason: "already_started",
+      releaseIntentId: RELEASE_INTENT_ID,
+      repository: REPOSITORY,
+      version: VERSION,
+      sourceBranch: SOURCE_BRANCH,
+      sourceRevision: SOURCE_REVISION,
+      releaseBranch: RELEASE_BRANCH,
+      releaseCommitSha: COMMIT_SHA,
+    };
     const { evaluateReleaseEligibility } = fakeEvaluateReleaseEligibility(alreadyStarted);
     let workspaceCalls = 0;
     const trackedMaterialize: MaterializeRepositoryWorkspace = async () => {
@@ -172,7 +182,16 @@ describe("executeEligibleReleaseStart", () => {
     });
 
     // Assert
-    expect(result).toEqual({ outcome: "already_started", releaseIntentId: RELEASE_INTENT_ID, releaseBranch: RELEASE_BRANCH, headSha: COMMIT_SHA });
+    expect(result).toEqual({
+      outcome: "already_started",
+      releaseIntentId: RELEASE_INTENT_ID,
+      repository: REPOSITORY,
+      version: VERSION,
+      sourceBranch: SOURCE_BRANCH,
+      sourceRevision: SOURCE_REVISION,
+      releaseBranch: RELEASE_BRANCH,
+      releaseCommitSha: COMMIT_SHA,
+    });
     expect(workspaceCalls).toBe(0);
   });
 
@@ -453,6 +472,8 @@ describe("executeEligibleReleaseStart", () => {
       releaseIntentId: RELEASE_INTENT_ID,
       repository: REPOSITORY,
       version: VERSION,
+      sourceBranch: SOURCE_BRANCH,
+      sourceRevision: SOURCE_REVISION,
       releaseBranch: RELEASE_BRANCH,
       commitSha: COMMIT_SHA,
       remoteSha: COMMIT_SHA,

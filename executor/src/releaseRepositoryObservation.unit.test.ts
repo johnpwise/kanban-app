@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { observeGitRefSha, observeRepositoryPackageVersion } from "./releaseRepositoryObservation";
+import { observeCommit, observeFileContent, observeGitRefSha, observeRepositoryPackageVersion } from "./releaseRepositoryObservation";
 
 import type { MintGithubDeliveryCredential } from "./githubAppCredential";
 
@@ -325,6 +325,252 @@ describe("observeRepositoryPackageVersion", () => {
     const result = await observeRepositoryPackageVersion({
       repository: REPOSITORY,
       ref: HEAD_SHA,
+      fetchImpl,
+      mintCredential: failingMintCredential,
+    });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "credential_unavailable", credentialReason: "config_invalid" });
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("observeCommit", () => {
+  const COMMIT_SHA = "c".repeat(40);
+  const PARENT_SHA = "a".repeat(40);
+
+  function commitResponse(overrides: Record<string, unknown> = {}) {
+    return {
+      sha: COMMIT_SHA,
+      commit: { message: "chore(release): prepare v0.2.0" },
+      parents: [{ sha: PARENT_SHA }],
+      files: [{ filename: "package-lock.json" }, { filename: "package.json" }],
+      ...overrides,
+    };
+  }
+
+  it("returns found:true with message, parent SHAs, and changed files for an existing commit", async () => {
+    // Arrange
+    const { fetchImpl, calls } = fakeFetch(() => jsonResponse(commitResponse(), 200));
+
+    // Act
+    const result = await observeCommit({
+      repository: REPOSITORY,
+      sha: COMMIT_SHA,
+      fetchImpl,
+      mintCredential: okMintCredential,
+    });
+
+    // Assert
+    expect(result).toEqual({
+      ok: true,
+      found: true,
+      commit: {
+        sha: COMMIT_SHA,
+        message: "chore(release): prepare v0.2.0",
+        parentShas: [PARENT_SHA],
+        changedFiles: ["package-lock.json", "package.json"],
+      },
+    });
+    const url = new URL(calls[0].url);
+    expect(url.origin + url.pathname).toBe(`https://api.github.com/repos/${REPOSITORY}/commits/${COMMIT_SHA}`);
+  });
+
+  it("returns found:false, not an error, for a 404 (commit does not exist)", async () => {
+    // Arrange
+    const { fetchImpl } = fakeFetch(() => jsonResponse({ message: "Not Found" }, 404));
+
+    // Act
+    const result = await observeCommit({ repository: REPOSITORY, sha: COMMIT_SHA, fetchImpl, mintCredential: okMintCredential });
+
+    // Assert
+    expect(result).toEqual({ ok: true, found: false });
+  });
+
+  it("returns commit_lookup_failed with the safe http status on a non-404 non-2xx response", async () => {
+    // Arrange
+    const { fetchImpl } = fakeFetch(() => jsonResponse({ message: "secret-should-not-leak" }, 500));
+
+    // Act
+    const result = await observeCommit({ repository: REPOSITORY, sha: COMMIT_SHA, fetchImpl, mintCredential: okMintCredential });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "commit_lookup_failed", httpStatus: 500 });
+    expect(JSON.stringify(result)).not.toContain("secret-should-not-leak");
+  });
+
+  it("returns commit_lookup_network_error when the fetch call rejects", async () => {
+    // Arrange
+    const fetchImpl = (async () => {
+      throw new Error("network down");
+    }) as unknown as typeof fetch;
+
+    // Act
+    const result = await observeCommit({ repository: REPOSITORY, sha: COMMIT_SHA, fetchImpl, mintCredential: okMintCredential });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "commit_lookup_network_error" });
+  });
+
+  it("returns commit_response_invalid when the response body has no parents array", async () => {
+    // Arrange
+    const { fetchImpl } = fakeFetch(() => jsonResponse({ sha: COMMIT_SHA, commit: { message: "x" }, files: [] }, 200));
+
+    // Act
+    const result = await observeCommit({ repository: REPOSITORY, sha: COMMIT_SHA, fetchImpl, mintCredential: okMintCredential });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "commit_response_invalid" });
+  });
+
+  it("returns commit_response_invalid when files is absent", async () => {
+    // Arrange
+    const { fetchImpl } = fakeFetch(() => jsonResponse(commitResponse({ files: undefined }), 200));
+
+    // Act
+    const result = await observeCommit({ repository: REPOSITORY, sha: COMMIT_SHA, fetchImpl, mintCredential: okMintCredential });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "commit_response_invalid" });
+  });
+
+  it("returns commit_response_invalid when the response body is not valid JSON", async () => {
+    // Arrange
+    const fetchImpl = (async () => new Response("not json", { status: 200 })) as unknown as typeof fetch;
+
+    // Act
+    const result = await observeCommit({ repository: REPOSITORY, sha: COMMIT_SHA, fetchImpl, mintCredential: okMintCredential });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "commit_response_invalid" });
+  });
+
+  it("returns credential_unavailable, passing through the credential failure reason, when minting fails", async () => {
+    // Arrange
+    const { calls } = fakeFetch(() => jsonResponse(commitResponse(), 200));
+    const failingMintCredential: MintGithubDeliveryCredential = async () => ({ ok: false, reason: "config_invalid" });
+    const fetchImpl = (async () => {
+      throw new Error("should not be called when credential minting fails");
+    }) as unknown as typeof fetch;
+
+    // Act
+    const result = await observeCommit({ repository: REPOSITORY, sha: COMMIT_SHA, fetchImpl, mintCredential: failingMintCredential });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "credential_unavailable", credentialReason: "config_invalid" });
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("observeFileContent", () => {
+  function contentsResponse(text: string) {
+    return { content: Buffer.from(text).toString("base64"), encoding: "base64" };
+  }
+
+  it("returns found:true with the decoded utf8 text content", async () => {
+    // Arrange
+    const { fetchImpl, calls } = fakeFetch(() => jsonResponse(contentsResponse('{"version":"0.1.0"}'), 200));
+
+    // Act
+    const result = await observeFileContent({
+      repository: REPOSITORY,
+      ref: HEAD_SHA,
+      path: "package-lock.json",
+      fetchImpl,
+      mintCredential: okMintCredential,
+    });
+
+    // Assert
+    expect(result).toEqual({ ok: true, found: true, content: '{"version":"0.1.0"}' });
+    const url = new URL(calls[0].url);
+    expect(url.origin + url.pathname).toBe(`https://api.github.com/repos/${REPOSITORY}/contents/package-lock.json`);
+    expect(url.searchParams.get("ref")).toBe(HEAD_SHA);
+  });
+
+  it("returns found:false, not an error, for a 404 (path does not exist at that ref)", async () => {
+    // Arrange
+    const { fetchImpl } = fakeFetch(() => jsonResponse({ message: "Not Found" }, 404));
+
+    // Act
+    const result = await observeFileContent({
+      repository: REPOSITORY,
+      ref: HEAD_SHA,
+      path: "package-lock.json",
+      fetchImpl,
+      mintCredential: okMintCredential,
+    });
+
+    // Assert
+    expect(result).toEqual({ ok: true, found: false });
+  });
+
+  it("returns file_lookup_failed with the safe http status on a non-404 non-2xx response", async () => {
+    // Arrange
+    const { fetchImpl } = fakeFetch(() => jsonResponse({ message: "secret-should-not-leak" }, 500));
+
+    // Act
+    const result = await observeFileContent({
+      repository: REPOSITORY,
+      ref: HEAD_SHA,
+      path: "package-lock.json",
+      fetchImpl,
+      mintCredential: okMintCredential,
+    });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "file_lookup_failed", httpStatus: 500 });
+    expect(JSON.stringify(result)).not.toContain("secret-should-not-leak");
+  });
+
+  it("returns file_lookup_network_error when the fetch call rejects", async () => {
+    // Arrange
+    const fetchImpl = (async () => {
+      throw new Error("network down");
+    }) as unknown as typeof fetch;
+
+    // Act
+    const result = await observeFileContent({
+      repository: REPOSITORY,
+      ref: HEAD_SHA,
+      path: "package-lock.json",
+      fetchImpl,
+      mintCredential: okMintCredential,
+    });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "file_lookup_network_error" });
+  });
+
+  it("returns file_response_invalid when the response body has no content field", async () => {
+    // Arrange
+    const { fetchImpl } = fakeFetch(() => jsonResponse({ encoding: "base64" }, 200));
+
+    // Act
+    const result = await observeFileContent({
+      repository: REPOSITORY,
+      ref: HEAD_SHA,
+      path: "package-lock.json",
+      fetchImpl,
+      mintCredential: okMintCredential,
+    });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "file_response_invalid" });
+  });
+
+  it("returns credential_unavailable, passing through the credential failure reason, when minting fails", async () => {
+    // Arrange
+    const { calls } = fakeFetch(() => jsonResponse(contentsResponse("{}"), 200));
+    const failingMintCredential: MintGithubDeliveryCredential = async () => ({ ok: false, reason: "config_invalid" });
+    const fetchImpl = (async () => {
+      throw new Error("should not be called when credential minting fails");
+    }) as unknown as typeof fetch;
+
+    // Act
+    const result = await observeFileContent({
+      repository: REPOSITORY,
+      ref: HEAD_SHA,
+      path: "package-lock.json",
       fetchImpl,
       mintCredential: failingMintCredential,
     });
