@@ -1,0 +1,1 @@
+ADA merge-completion lifecycle live E2E validation marker - safe to delete.
