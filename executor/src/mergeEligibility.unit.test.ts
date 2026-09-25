@@ -61,6 +61,7 @@ function observedPullRequest(overrides: Partial<ObservedPullRequest> = {}): Obse
     baseRef: BASE_BRANCH,
     baseRepositoryFullName: REPOSITORY,
     mergeable: true,
+    mergeCommitSha: null,
     ...overrides,
   };
 }
@@ -266,16 +267,85 @@ describe("evaluateMergeEligibility", () => {
       expect(result).toEqual({ eligible: false, reason: "pull_request_response_invalid" });
     });
 
-    it("should return pull_request_already_merged even though the PR is also closed", async () => {
+    it("should reconcile an already-merged PR whose live identity still agrees with the durable delivery, exposing recoverable merge identity", async () => {
+      const MERGE_COMMIT_SHA = "c".repeat(40);
       const { repository } = createFakeExecutionRunRepository({ data: validExecutionRunData() });
       const { observePullRequest } = fakeObservePullRequest({
         ok: true,
-        pullRequest: observedPullRequest({ state: "closed", merged: true }),
+        pullRequest: observedPullRequest({ state: "closed", merged: true, mergeCommitSha: MERGE_COMMIT_SHA }),
       });
 
       const result = await evaluateMergeEligibility({ executionRunId: EXECUTION_RUN_ID, repository, observePullRequest });
 
-      expect(result).toEqual({ eligible: false, reason: "pull_request_already_merged" });
+      expect(result).toEqual({
+        eligible: false,
+        reason: "pull_request_already_merged",
+        executionRunId: EXECUTION_RUN_ID,
+        repository: REPOSITORY,
+        pullRequestNumber: PULL_REQUEST_NUMBER,
+        deliveryCommitSha: DELIVERY_COMMIT_SHA,
+        mergeCommitSha: MERGE_COMMIT_SHA,
+      });
+    });
+
+    it("should fail closed with a distinct mismatch reason — never a successful recovery — when an already-merged PR's head SHA disagrees with the durable delivery", async () => {
+      const { repository } = createFakeExecutionRunRepository({ data: validExecutionRunData() });
+      const { observePullRequest } = fakeObservePullRequest({
+        ok: true,
+        pullRequest: observedPullRequest({ state: "closed", merged: true, mergeCommitSha: "c".repeat(40), headSha: OTHER_COMMIT_SHA }),
+      });
+
+      const result = await evaluateMergeEligibility({ executionRunId: EXECUTION_RUN_ID, repository, observePullRequest });
+
+      expect(result).toEqual({ eligible: false, reason: "pull_request_already_merged_head_sha_mismatch" });
+    });
+
+    it("should fail closed with a distinct mismatch reason when an already-merged PR's head branch disagrees with the durable delivery", async () => {
+      const { repository } = createFakeExecutionRunRepository({ data: validExecutionRunData() });
+      const { observePullRequest } = fakeObservePullRequest({
+        ok: true,
+        pullRequest: observedPullRequest({ state: "closed", merged: true, mergeCommitSha: "c".repeat(40), headRef: "some-other-branch" }),
+      });
+
+      const result = await evaluateMergeEligibility({ executionRunId: EXECUTION_RUN_ID, repository, observePullRequest });
+
+      expect(result).toEqual({ eligible: false, reason: "pull_request_already_merged_head_branch_mismatch" });
+    });
+
+    it("should fail closed with a distinct mismatch reason when an already-merged PR's base branch disagrees with the requested base", async () => {
+      const { repository } = createFakeExecutionRunRepository({ data: validExecutionRunData() });
+      const { observePullRequest } = fakeObservePullRequest({
+        ok: true,
+        pullRequest: observedPullRequest({ state: "closed", merged: true, mergeCommitSha: "c".repeat(40), baseRef: "main" }),
+      });
+
+      const result = await evaluateMergeEligibility({ executionRunId: EXECUTION_RUN_ID, repository, observePullRequest });
+
+      expect(result).toEqual({ eligible: false, reason: "pull_request_already_merged_base_branch_mismatch" });
+    });
+
+    it("should fail closed with a distinct reason — never a successful recovery — when an already-merged PR reports no merge commit SHA at all", async () => {
+      const { repository } = createFakeExecutionRunRepository({ data: validExecutionRunData() });
+      const { observePullRequest } = fakeObservePullRequest({
+        ok: true,
+        pullRequest: observedPullRequest({ state: "closed", merged: true, mergeCommitSha: null }),
+      });
+
+      const result = await evaluateMergeEligibility({ executionRunId: EXECUTION_RUN_ID, repository, observePullRequest });
+
+      expect(result).toEqual({ eligible: false, reason: "pull_request_already_merged_commit_sha_missing" });
+    });
+
+    it("should fail closed on pull_request_repository_mismatch even when the PR is already merged, never treating a mismatched fork's merge as recovery", async () => {
+      const { repository } = createFakeExecutionRunRepository({ data: validExecutionRunData() });
+      const { observePullRequest } = fakeObservePullRequest({
+        ok: true,
+        pullRequest: observedPullRequest({ state: "closed", merged: true, mergeCommitSha: "c".repeat(40), headRepositoryFullName: "someone-else/kanban-app" }),
+      });
+
+      const result = await evaluateMergeEligibility({ executionRunId: EXECUTION_RUN_ID, repository, observePullRequest });
+
+      expect(result).toEqual({ eligible: false, reason: "pull_request_repository_mismatch" });
     });
 
     it("should return pull_request_closed for a closed, unmerged PR", async () => {

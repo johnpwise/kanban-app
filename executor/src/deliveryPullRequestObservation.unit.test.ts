@@ -45,6 +45,7 @@ function githubPullRequest(overrides: Record<string, unknown> = {}) {
     draft: false,
     merged: false,
     mergeable: true,
+    merge_commit_sha: null,
     head: {
       sha: HEAD_SHA,
       ref: "ada/exec-req-123",
@@ -80,6 +81,7 @@ describe("observeDeliveryPullRequest", () => {
         baseRef: "develop",
         baseRepositoryFullName: REPOSITORY,
         mergeable: true,
+        mergeCommitSha: null,
       },
     });
     const url = new URL(calls[0].url);
@@ -125,6 +127,44 @@ describe("observeDeliveryPullRequest", () => {
 
     // Assert
     expect(result).toMatchObject({ ok: true, pullRequest: { mergeable: false } });
+  });
+
+  it("should return the GitHub merge commit SHA when the pull request has been merged", async () => {
+    // Arrange
+    const MERGE_COMMIT_SHA = "c".repeat(40);
+    const { fetchImpl } = fakeFetch(() =>
+      jsonResponse(githubPullRequest({ state: "closed", merged: true, merge_commit_sha: MERGE_COMMIT_SHA }), 200),
+    );
+
+    // Act
+    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+
+    // Assert
+    expect(result).toMatchObject({ ok: true, pullRequest: { merged: true, mergeCommitSha: MERGE_COMMIT_SHA } });
+  });
+
+  it("should return mergeCommitSha null for an open, not-yet-merged pull request", async () => {
+    // Arrange
+    const { fetchImpl } = fakeFetch(() => jsonResponse(githubPullRequest({ merge_commit_sha: null }), 200));
+
+    // Act
+    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+
+    // Assert
+    expect(result).toMatchObject({ ok: true, pullRequest: { mergeCommitSha: null } });
+  });
+
+  it("should return pull_request_response_invalid when the response body has no merge_commit_sha field at all", async () => {
+    // Arrange
+    const malformed = githubPullRequest() as Record<string, unknown>;
+    delete malformed.merge_commit_sha;
+    const { fetchImpl } = fakeFetch(() => jsonResponse(malformed, 200));
+
+    // Act
+    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+
+    // Assert
+    expect(result).toEqual({ ok: false, reason: "pull_request_response_invalid" });
   });
 
   it("should return headRepositoryFullName null when the head repository is missing (e.g. a deleted fork)", async () => {

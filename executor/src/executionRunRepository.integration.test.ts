@@ -463,3 +463,186 @@ describeWithEmulator(
     });
   },
 );
+
+describeWithEmulator(
+  "createFirestoreExecutionRunRepository().recordMergeResult against the Firestore emulator",
+  () => {
+    const projectId = process.env.GCLOUD_PROJECT ?? "demo-kanban-app-test";
+    const app = initializeApp({ projectId }, `executor-merge-result-repository-integration-${randomUUID()}`);
+    const firestore = getFirestore(app);
+    const deliveryCommitSha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef1";
+    const otherDeliveryCommitSha = "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff1";
+    const mergeCommitSha = "cafefacecafefacecafefacecafefacecafeface1";
+    const otherMergeCommitSha = "beefbeefbeefbeefbeefbeefbeefbeefbeefbeef1";
+    const pullRequestNumber = 42;
+    const mergeResult = { deliveryCommitSha, pullRequestNumber, mergeCommitSha };
+
+    beforeAll(() => {
+      expect(firestoreEmulatorHost).toMatch(/^127\.0\.0\.1:\d+$/);
+    });
+
+    afterAll(async () => {
+      await deleteApp(app);
+    });
+
+    it("records the merge result together with the merged lifecycle status, atomically, on a run with no existing merge", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "ci_succeeded" });
+      const repository = createFirestoreExecutionRunRepository();
+
+      // Act
+      const outcome = await repository.recordMergeResult(executionRunId, mergeResult);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.status).toBe("merged");
+      expect(data?.merge?.deliveryCommitSha).toBe(deliveryCommitSha);
+      expect(data?.merge?.pullRequestNumber).toBe(pullRequestNumber);
+      expect(data?.merge?.mergeCommitSha).toBe(mergeCommitSha);
+      expect(data?.merge?.recordedAt).toBeInstanceOf(Timestamp);
+    });
+
+    it("idempotently accepts recording the exact same merge identity that is already persisted", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "ci_succeeded" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordMergeResult(executionRunId, mergeResult);
+      const firstRecordedAt = (await docRef.get()).data()?.merge?.recordedAt;
+
+      // Act
+      const outcome = await repository.recordMergeResult(executionRunId, mergeResult);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "already_recorded" });
+      const data = (await docRef.get()).data();
+      expect(data?.merge?.recordedAt).toEqual(firstRecordedAt);
+      expect(data?.status).toBe("merged");
+    });
+
+    it("refuses to overwrite an already-persisted merge result for a conflicting delivery commit SHA", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "ci_succeeded" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordMergeResult(executionRunId, mergeResult);
+
+      // Act
+      const outcome = await repository.recordMergeResult(executionRunId, { ...mergeResult, deliveryCommitSha: otherDeliveryCommitSha });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.merge?.deliveryCommitSha).toBe(deliveryCommitSha);
+    });
+
+    it("refuses to overwrite an already-persisted merge result for a conflicting pull request number", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "ci_succeeded" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordMergeResult(executionRunId, mergeResult);
+
+      // Act
+      const outcome = await repository.recordMergeResult(executionRunId, { ...mergeResult, pullRequestNumber: 99 });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.merge?.pullRequestNumber).toBe(pullRequestNumber);
+    });
+
+    it("refuses to overwrite an already-persisted merge result for a conflicting merge commit SHA", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "ci_succeeded" });
+      const repository = createFirestoreExecutionRunRepository();
+      await repository.recordMergeResult(executionRunId, mergeResult);
+
+      // Act
+      const outcome = await repository.recordMergeResult(executionRunId, { ...mergeResult, mergeCommitSha: otherMergeCommitSha });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.merge?.mergeCommitSha).toBe(mergeCommitSha);
+    });
+
+    it("treats a missing execution run at write time as a conflict and creates no merge state", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      const repository = createFirestoreExecutionRunRepository();
+
+      // Act
+      const outcome = await repository.recordMergeResult(executionRunId, mergeResult);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const snapshot = await docRef.get();
+      expect(snapshot.exists).toBe(false);
+    });
+
+    it("fails closed with a distinct lifecycle_conflict when the run's status is not yet ci_succeeded", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "accepted" });
+      const repository = createFirestoreExecutionRunRepository();
+
+      // Act
+      const outcome = await repository.recordMergeResult(executionRunId, mergeResult);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "lifecycle_conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.merge).toBeUndefined();
+      expect(data?.status).toBe("accepted");
+    });
+
+    it("fails closed with a distinct lifecycle_conflict when the run's status contradicts an already-established ci_failed result", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "ci_failed" });
+      const repository = createFirestoreExecutionRunRepository();
+
+      // Act
+      const outcome = await repository.recordMergeResult(executionRunId, mergeResult);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "lifecycle_conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.merge).toBeUndefined();
+      expect(data?.status).toBe("ci_failed");
+    });
+
+    it("given many concurrent recordings of the same merge result, exactly one create is persisted and the rest converge idempotently", async () => {
+      // Arrange
+      const executionRunId = `req-${randomUUID()}`;
+      const docRef = firestore.collection("executionRuns").doc(executionRunId);
+      await docRef.set({ status: "ci_succeeded" });
+      const repository = createFirestoreExecutionRunRepository();
+      const attemptCount = 5;
+
+      // Act
+      const outcomes = await Promise.all(
+        Array.from({ length: attemptCount }, () => repository.recordMergeResult(executionRunId, mergeResult)),
+      );
+
+      // Assert
+      expect(outcomes.filter((outcome) => outcome.outcome === "created")).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome.outcome === "already_recorded")).toHaveLength(attemptCount - 1);
+      const data = (await docRef.get()).data();
+      expect(data?.merge?.mergeCommitSha).toBe(mergeCommitSha);
+      expect(data?.status).toBe("merged");
+    });
+  },
+);
