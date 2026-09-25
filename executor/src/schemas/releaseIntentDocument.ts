@@ -94,6 +94,23 @@ export function deriveReleaseIntentId(repository: string, version: string): stri
 }
 
 /**
+ * The reverse of `deriveReleaseIntentId`, used by `releaseControllerMain.ts` to recover the
+ * caller-supplied `version` from a trusted `releaseIntentId` it was given (the Firebase launcher
+ * passes only `releaseIntentId`, never a separate `version` field). Fails closed to `undefined`
+ * rather than guessing: if `releaseIntentId` does not start with the exact prefix derived from the
+ * trusted `repository`, or the remainder is not a valid `releaseVersionSchema` version, the caller
+ * must never proceed as if a version had been resolved.
+ */
+export function deriveReleaseVersionFromIntentId(releaseIntentId: string, repository: string): string | undefined {
+  const prefix = `${deriveReleaseIntentId(repository, "")}`;
+  if (!releaseIntentId.startsWith(prefix)) {
+    return undefined;
+  }
+  const candidate = releaseIntentId.slice(prefix.length);
+  return releaseVersionSchema.safeParse(candidate).success ? candidate : undefined;
+}
+
+/**
  * Strict greater-than by plain `MAJOR.MINOR.PATCH` precedence. Callers must validate both inputs
  * against `releaseVersionSchema` first — this comparator does no format checking of its own so a
  * malformed live-observed "current version" can be reported as its own distinct eligibility

@@ -2,13 +2,16 @@ import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/fire
 import { onMessagePublished } from "firebase-functions/v2/pubsub";
 import * as logger from "firebase-functions/logger";
 
+import { adaReleaseRepository } from "./adaReleaseControllerRunLauncherConfig";
 import { launchAdaCiControllerJob, launchAdaCiControllerJobInEmulator } from "./adaCiControllerJobLauncher";
 import { launchAdaExecutorJob, launchAdaExecutorJobInEmulator } from "./adaExecutorJobLauncher";
 import { launchAdaMergeControllerJob, launchAdaMergeControllerJobInEmulator } from "./adaMergeControllerJobLauncher";
+import { launchAdaReleaseControllerJob, launchAdaReleaseControllerJobInEmulator } from "./adaReleaseControllerJobLauncher";
 import { createFirestoreExecutionRunTransaction } from "./firestoreExecutionRunTransaction";
 import { launchAdaMergeControl } from "./launchAdaMergeControl";
 import { launchDeliveryCiControl } from "./launchDeliveryCiControl";
 import { launchExecutionRun } from "./launchExecutionRun";
+import { launchReleaseStart } from "./launchReleaseStart";
 import { handleAdaExecutionRequestPublished } from "./onAdaExecutionRequestPublished";
 import { dispatchTopicName, handleExecutionRequestCreated } from "./onExecutionRequestCreated";
 
@@ -174,6 +177,50 @@ export const launchAdaMergeCompletion = onDocumentUpdated(
         process.env.FUNCTIONS_EMULATOR === "true"
           ? launchAdaMergeControllerJobInEmulator
           : launchAdaMergeControllerJob,
+      logger,
+    });
+  },
+);
+
+/**
+ * Separate from every trigger above: this one is not part of the automatic delivery pipeline at
+ * all. It observes the *creation* of an explicit, authenticated release request
+ * (`src/actions/startRelease.ts`, app-side) and launches the separate `ada-release-controller`
+ * Job, which resolves a fresh source revision, durably records the release intent, and performs a
+ * guarded release-start (see `executor/src/releaseControllerMain.ts`). `releaseRequests/{id}`
+ * carries only `version` — this handler derives `releaseIntentId` from that version and its own
+ * trusted `adaReleaseRepository` configuration (`launchReleaseStart.ts`), never from the document.
+ * Region matches the other triggers for the same reason (co-located with the Firestore database
+ * they read from).
+ */
+export const launchAdaReleaseStart = onDocumentCreated(
+  {
+    document: "releaseRequests/{releaseRequestId}",
+    region: "europe-west2",
+    // A transient Cloud Run API failure is rethrown by launchReleaseStart so Firebase retries the
+    // event; redelivery is safe — it computes the identical deterministic releaseIntentId and
+    // converges on the same durable idempotency contracts in recordReleaseIntent/
+    // recordReleaseStartResult, not a new dedup mechanism here.
+    // https://firebase.google.com/docs/functions/retries
+    retry: true,
+    // Must run as the SA granted `roles/run.jobsExecutorWithOverrides` on the
+    // `ada-release-controller` Cloud Run Job. Reuses the same `ada-launcher-runtime` identity as
+    // the other launchers above; granting it that additional binding on the new Job is a live IAM
+    // mutation, deferred to an explicit approval boundary (not performed by this code change) —
+    // same deferral already recorded for the CI-controller/merge-controller launchers.
+    serviceAccount: "ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com",
+  },
+  async (event) => {
+    await launchReleaseStart({
+      documentId: event.params.releaseRequestId,
+      data: event.data?.data(),
+      eventId: event.id,
+      trustedRepository: adaReleaseRepository.value(),
+      // Same emulator guard as the other launchers above, and for the same reason: emulator-backed
+      // integration tests write to releaseRequests/{id} directly and must never reach the real
+      // Cloud Run Admin API.
+      launchJob:
+        process.env.FUNCTIONS_EMULATOR === "true" ? launchAdaReleaseControllerJobInEmulator : launchAdaReleaseControllerJob,
       logger,
     });
   },
