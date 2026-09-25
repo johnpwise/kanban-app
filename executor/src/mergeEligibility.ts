@@ -16,7 +16,7 @@ export interface EvaluateMergeEligibilityParams {
 }
 
 export type MergeEligibilityOutcome =
-  | { eligible: true; executionRunId: string; commitSha: string; pullRequestNumber: number }
+  | { eligible: true; executionRunId: string; repository: string; commitSha: string; pullRequestNumber: number }
   | { eligible: false; reason: "execution_run_load_error" }
   | { eligible: false; reason: "execution_run_not_found" }
   | { eligible: false; reason: "execution_run_invalid" }
@@ -194,5 +194,11 @@ export async function evaluateMergeEligibility(params: EvaluateMergeEligibilityP
   }
 
   logger?.info("Merge eligible: durable delivery state agrees with live GitHub pull request state.", safeIdentifiers);
-  return { eligible: true, executionRunId, commitSha: expectedCommitSha, pullRequestNumber: pullRequest.number };
+  return {
+    eligible: true,
+    executionRunId,
+    repository: expectedRepository,
+    commitSha: expectedCommitSha,
+    pullRequestNumber: pullRequest.number,
+  };
 }
