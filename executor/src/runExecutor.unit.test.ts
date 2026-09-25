@@ -2752,4 +2752,360 @@ describe("runExecutor", () => {
       expect(calls[0].title).toBe("ADA delivery: req-1");
     });
   });
+
+  describe("recordDelivery wiring", () => {
+    it("persists the independently-verified remote branch and commit SHA once remote delivery is verified", async () => {
+      // Arrange
+      const { repository, recordDeliveryCalls } = createFakeExecutionRunRepository({ data: validRunData() });
+      const { logger } = createFakeLogger();
+      const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+      const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+      const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+      const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ branchName: "ada/req-1" });
+      const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({ commitSha: "c".repeat(40) });
+      const { ensureAdaDeliveryPush } = createFakeEnsureAdaDeliveryPush({
+        remoteBranch: "ada/req-1",
+        remoteSha: "c".repeat(40),
+      });
+
+      // Act
+      const outcome = await runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: "req-1" },
+        repository,
+        logger,
+        materializeRepositoryWorkspace,
+        inspectWorkingTree,
+        verifyGitIntegrity,
+        ensureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit,
+        ensureAdaDeliveryPush,
+      });
+
+      // Assert
+      expect(recordDeliveryCalls).toEqual([
+        { executionRunId: "req-1", delivery: { branch: "ada/req-1", commitSha: "c".repeat(40) } },
+      ]);
+      expect(outcome).toMatchObject({ ok: true, workingTree: "changes_detected" });
+    });
+
+    it("includes the successful Pull Request identity in the persisted delivery", async () => {
+      // Arrange
+      const { repository, recordDeliveryCalls } = createFakeExecutionRunRepository({ data: validRunData() });
+      const { logger } = createFakeLogger();
+      const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+      const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+      const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+      const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ branchName: "ada/req-1" });
+      const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({ commitSha: "c".repeat(40) });
+      const { ensureAdaDeliveryPush } = createFakeEnsureAdaDeliveryPush({
+        remoteBranch: "ada/req-1",
+        remoteSha: "c".repeat(40),
+      });
+      const { createOrReuseAdaPullRequest } = createFakeCreateOrReuseAdaPullRequest({
+        status: "created",
+        number: 42,
+        htmlUrl: "https://github.com/johnpwise/kanban-app/pull/42",
+      });
+
+      // Act
+      await runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: "req-1" },
+        repository,
+        logger,
+        materializeRepositoryWorkspace,
+        inspectWorkingTree,
+        verifyGitIntegrity,
+        ensureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit,
+        ensureAdaDeliveryPush,
+        createOrReuseAdaPullRequest,
+      });
+
+      // Assert
+      expect(recordDeliveryCalls).toEqual([
+        {
+          executionRunId: "req-1",
+          delivery: {
+            branch: "ada/req-1",
+            commitSha: "c".repeat(40),
+            pullRequest: { number: 42, htmlUrl: "https://github.com/johnpwise/kanban-app/pull/42" },
+          },
+        },
+      ]);
+    });
+
+    it("does not include a failed Pull Request attempt in the persisted delivery", async () => {
+      // Arrange
+      const { repository, recordDeliveryCalls } = createFakeExecutionRunRepository({ data: validRunData() });
+      const { logger } = createFakeLogger();
+      const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+      const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+      const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+      const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ branchName: "ada/req-1" });
+      const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({ commitSha: "c".repeat(40) });
+      const { ensureAdaDeliveryPush } = createFakeEnsureAdaDeliveryPush({
+        remoteBranch: "ada/req-1",
+        remoteSha: "c".repeat(40),
+      });
+      const { createOrReuseAdaPullRequest } = createFakeCreateOrReuseAdaPullRequest({
+        reason: "create_failed",
+        httpStatus: 403,
+      });
+
+      // Act
+      const outcome = await runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: "req-1" },
+        repository,
+        logger,
+        materializeRepositoryWorkspace,
+        inspectWorkingTree,
+        verifyGitIntegrity,
+        ensureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit,
+        ensureAdaDeliveryPush,
+        createOrReuseAdaPullRequest,
+      });
+
+      // Assert
+      expect(recordDeliveryCalls).toEqual([
+        { executionRunId: "req-1", delivery: { branch: "ada/req-1", commitSha: "c".repeat(40) } },
+      ]);
+      expect(outcome).toMatchObject({ ok: true, pullRequest: { status: "failed", reason: "create_failed" } });
+    });
+
+    it("does not attempt to persist delivery when the remote push cannot be verified", async () => {
+      // Arrange
+      const { repository, recordDeliveryCalls } = createFakeExecutionRunRepository({ data: validRunData() });
+      const { logger } = createFakeLogger();
+      const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+      const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+      const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+      const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+      const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
+      const { ensureAdaDeliveryPush } = createFakeEnsureAdaDeliveryPush({ reason: "remote_sha_mismatch" });
+
+      // Act
+      const outcome = await runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: "req-1" },
+        repository,
+        logger,
+        materializeRepositoryWorkspace,
+        inspectWorkingTree,
+        verifyGitIntegrity,
+        ensureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit,
+        ensureAdaDeliveryPush,
+      });
+
+      // Assert
+      expect(recordDeliveryCalls).toEqual([]);
+      expect(outcome).toMatchObject({ ok: true, remoteDelivery: { status: "failed" } });
+    });
+
+    it("does not attempt to persist delivery for a clean working tree", async () => {
+      // Arrange
+      const { repository, recordDeliveryCalls } = createFakeExecutionRunRepository({ data: validRunData() });
+      const { logger } = createFakeLogger();
+      const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch();
+      const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit();
+      const { ensureAdaDeliveryPush } = createFakeEnsureAdaDeliveryPush();
+      const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+      const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "clean" });
+      const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+
+      // Act
+      await runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: "req-1" },
+        repository,
+        logger,
+        materializeRepositoryWorkspace,
+        inspectWorkingTree,
+        verifyGitIntegrity,
+        ensureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit,
+        ensureAdaDeliveryPush,
+      });
+
+      // Assert
+      expect(recordDeliveryCalls).toEqual([]);
+    });
+
+    it("returns success unchanged when the exact same delivery identity was already durably recorded (idempotent retry)", async () => {
+      // Arrange
+      const { repository } = createFakeExecutionRunRepository({
+        data: validRunData(),
+        recordDelivery: { outcome: "already_recorded" },
+      });
+      const { logger } = createFakeLogger();
+      const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+      const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+      const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+      const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ branchName: "ada/req-1" });
+      const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({ commitSha: "c".repeat(40) });
+      const { ensureAdaDeliveryPush } = createFakeEnsureAdaDeliveryPush({
+        remoteBranch: "ada/req-1",
+        remoteSha: "c".repeat(40),
+      });
+
+      // Act
+      const outcome = await runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: "req-1" },
+        repository,
+        logger,
+        materializeRepositoryWorkspace,
+        inspectWorkingTree,
+        verifyGitIntegrity,
+        ensureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit,
+        ensureAdaDeliveryPush,
+      });
+
+      // Assert
+      expect(outcome).toEqual({
+        ok: true,
+        claimed: true,
+        workingTree: "changes_detected",
+        deliveryBranch: "ada/req-1",
+        deliveryCommitSha: "c".repeat(40),
+        remoteDelivery: { status: "verified", remoteBranch: "ada/req-1", remoteSha: "c".repeat(40) },
+      });
+    });
+
+    it("returns failure, not false success, when a conflicting delivery identity is already durably persisted", async () => {
+      // Arrange
+      const { repository } = createFakeExecutionRunRepository({
+        data: validRunData(),
+        recordDelivery: { outcome: "conflict" },
+      });
+      const { logger, calls: logCalls } = createFakeLogger();
+      const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+      const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+      const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+      const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ branchName: "ada/req-1" });
+      const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({ commitSha: "c".repeat(40) });
+      const { ensureAdaDeliveryPush } = createFakeEnsureAdaDeliveryPush({
+        remoteBranch: "ada/req-1",
+        remoteSha: "c".repeat(40),
+      });
+
+      // Act
+      const outcome = await runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: "req-1" },
+        repository,
+        logger,
+        materializeRepositoryWorkspace,
+        inspectWorkingTree,
+        verifyGitIntegrity,
+        ensureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit,
+        ensureAdaDeliveryPush,
+      });
+
+      // Assert
+      expect(outcome).toEqual({ ok: false, reason: "delivery_persistence_conflict" });
+      expect(cleanupCallCount()).toBe(1);
+      const errorCall = logCalls.find(
+        (call) => call.level === "error" && call.message.includes("conflicting delivery"),
+      );
+      expect(errorCall?.fields).toMatchObject({
+        executionRequestId: "req-1",
+        deliveryBranch: "ada/req-1",
+        deliveryCommitSha: "c".repeat(40),
+      });
+      expect(serializedLogs(logCalls)).not.toContain(PROMPT);
+      expect(serializedLogs(logCalls)).not.toContain(TITLE);
+    });
+
+    it("returns failure, not false success, when durably persisting the verified delivery throws a transient error", async () => {
+      // Arrange
+      const { repository } = createFakeExecutionRunRepository({
+        data: validRunData(),
+        recordDeliveryThrowError: new Error("unavailable"),
+      });
+      const { logger, calls: logCalls } = createFakeLogger();
+      const { materializeRepositoryWorkspace, cleanupCallCount } = createFakeMaterializeRepositoryWorkspace();
+      const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+      const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+      const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ branchName: "ada/req-1" });
+      const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({ commitSha: "c".repeat(40) });
+      const { ensureAdaDeliveryPush } = createFakeEnsureAdaDeliveryPush({
+        remoteBranch: "ada/req-1",
+        remoteSha: "c".repeat(40),
+      });
+
+      // Act
+      const outcome = await runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: "req-1" },
+        repository,
+        logger,
+        materializeRepositoryWorkspace,
+        inspectWorkingTree,
+        verifyGitIntegrity,
+        ensureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit,
+        ensureAdaDeliveryPush,
+      });
+
+      // Assert
+      expect(outcome).toEqual({ ok: false, reason: "delivery_persistence_error" });
+      expect(cleanupCallCount()).toBe(1);
+      expect(serializedLogs(logCalls)).not.toContain(PROMPT);
+      expect(serializedLogs(logCalls)).not.toContain(TITLE);
+    });
+
+    it("proves the ordering: remote delivery verified -> Pull Request attempted -> delivery durably persisted -> cleanup", async () => {
+      // Arrange
+      const events: string[] = [];
+      const { repository, recordDeliveryCalls } = createFakeExecutionRunRepository({ data: validRunData() });
+      const { logger } = createFakeLogger();
+      const { materializeRepositoryWorkspace } = createFakeMaterializeRepositoryWorkspace();
+      const wrappedMaterialize: typeof materializeRepositoryWorkspace = async (request) => {
+        const outcome = await materializeRepositoryWorkspace(request);
+        if (outcome.ok) {
+          const cleanup = outcome.cleanup;
+          return {
+            ...outcome,
+            cleanup: async () => {
+              events.push("cleanup");
+              await cleanup();
+            },
+          };
+        }
+        return outcome;
+      };
+      const { inspectWorkingTree } = createFakeInspectWorkingTree({ status: "changes_detected" });
+      const { verifyGitIntegrity } = createFakeVerifyGitIntegrity();
+      const { ensureAdaDeliveryBranch } = createFakeEnsureAdaDeliveryBranch({ branchName: "ada/req-1" });
+      const { ensureAdaDeliveryCommit } = createFakeEnsureAdaDeliveryCommit({ commitSha: "c".repeat(40) });
+      const { ensureAdaDeliveryPush } = createFakeEnsureAdaDeliveryPush({
+        remoteBranch: "ada/req-1",
+        remoteSha: "c".repeat(40),
+        onCall: () => events.push("push_verified"),
+      });
+      const { createOrReuseAdaPullRequest } = createFakeCreateOrReuseAdaPullRequest({
+        status: "created",
+        number: 42,
+        htmlUrl: "https://github.com/johnpwise/kanban-app/pull/42",
+        onCall: () => events.push("pull_request_attempted"),
+      });
+
+      // Act
+      await runExecutor({
+        env: { ADA_EXECUTION_RUN_ID: "req-1" },
+        repository,
+        logger,
+        materializeRepositoryWorkspace: wrappedMaterialize,
+        inspectWorkingTree,
+        verifyGitIntegrity,
+        ensureAdaDeliveryBranch,
+        ensureAdaDeliveryCommit,
+        ensureAdaDeliveryPush,
+        createOrReuseAdaPullRequest,
+      });
+
+      // Assert
+      expect(events).toEqual(["push_verified", "pull_request_attempted", "cleanup"]);
+      expect(recordDeliveryCalls).toHaveLength(1);
+    });
+  });
 });

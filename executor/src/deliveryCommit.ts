@@ -1,3 +1,5 @@
+import { createGitCommit, resolveGitCommitSha, verifyGitCommitTopology } from "./gitCommitOperations";
+
 import type { RunGit } from "./gitProcess";
 
 /**
@@ -83,30 +85,14 @@ export interface CreateDeliveryCommitParams extends CreateDeliveryCommitRequest 
  * than `git config` writes, so nothing persists in the workspace's `.git/config` and no ambient
  * identity (the fixture's own, or one the cloned repository's config might set) is inherited.
  */
-export async function createDeliveryCommit({
-  workspacePath,
-  message,
-  runGit,
-}: CreateDeliveryCommitParams): Promise<CreateDeliveryCommitOutcome> {
-  const outcome = await runGit({
-    args: [
-      "-c",
-      `user.name=${ADA_DELIVERY_COMMIT_AUTHOR_NAME}`,
-      "-c",
-      `user.email=${ADA_DELIVERY_COMMIT_AUTHOR_EMAIL}`,
-      "-c",
-      "commit.gpgsign=false",
-      "commit",
-      "--no-verify",
-      "-m",
-      message,
-    ],
-    cwd: workspacePath,
+export async function createDeliveryCommit({ workspacePath, message, runGit }: CreateDeliveryCommitParams): Promise<CreateDeliveryCommitOutcome> {
+  return createGitCommit({
+    workspacePath,
+    message,
+    authorName: ADA_DELIVERY_COMMIT_AUTHOR_NAME,
+    authorEmail: ADA_DELIVERY_COMMIT_AUTHOR_EMAIL,
+    runGit,
   });
-  if (!outcome.ok) {
-    return { ok: false, reason: "commit_failed", gitErrorCode: outcome.code };
-  }
-  return { ok: true };
 }
 
 export interface ResolveDeliveryCommitShaRequest {
@@ -128,15 +114,8 @@ export interface ResolveDeliveryCommitShaParams extends ResolveDeliveryCommitSha
 }
 
 /** Resolves the just-created commit's SHA via `git rev-parse HEAD`. Never assumes success from the commit's own exit code alone. */
-export async function resolveDeliveryCommitSha({
-  workspacePath,
-  runGit,
-}: ResolveDeliveryCommitShaParams): Promise<ResolveDeliveryCommitShaOutcome> {
-  const outcome = await runGit({ args: ["rev-parse", "HEAD"], cwd: workspacePath });
-  if (!outcome.ok) {
-    return { ok: false, reason: "resolution_failed", gitErrorCode: outcome.code };
-  }
-  return { ok: true, commitSha: outcome.stdout.trim() };
+export async function resolveDeliveryCommitSha(params: ResolveDeliveryCommitShaParams): Promise<ResolveDeliveryCommitShaOutcome> {
+  return resolveGitCommitSha(params);
 }
 
 export interface VerifyDeliveryCommitRequest {
@@ -193,41 +172,8 @@ export interface VerifyDeliveryCommitParams extends VerifyDeliveryCommitRequest 
  * materialised and persisted before the coding-agent invocation. Short-circuits on the first
  * failing resolution step; never attempts a later check once an earlier one could not be resolved.
  */
-export async function verifyDeliveryCommit({
-  workspacePath,
-  expectedCommitSha,
-  expectedBranch,
-  expectedParentSha,
-  runGit,
-}: VerifyDeliveryCommitParams): Promise<VerifyDeliveryCommitOutcome> {
-  const headOutcome = await runGit({ args: ["rev-parse", "HEAD"], cwd: workspacePath });
-  if (!headOutcome.ok) {
-    return { ok: false, reason: "inspection_failed", stage: "resolve_head", gitErrorCode: headOutcome.code };
-  }
-  const actualHeadSha = headOutcome.stdout.trim();
-  if (actualHeadSha !== expectedCommitSha) {
-    return { ok: false, reason: "head_mismatch", expectedCommitSha, actualHeadSha };
-  }
-
-  const branchOutcome = await runGit({ args: ["rev-parse", "--abbrev-ref", "HEAD"], cwd: workspacePath });
-  if (!branchOutcome.ok) {
-    return { ok: false, reason: "inspection_failed", stage: "resolve_branch", gitErrorCode: branchOutcome.code };
-  }
-  const actualBranch = branchOutcome.stdout.trim();
-  if (actualBranch !== expectedBranch) {
-    return { ok: false, reason: "branch_mismatch", expectedBranch, actualBranch };
-  }
-
-  const parentOutcome = await runGit({ args: ["rev-parse", `${expectedCommitSha}^`], cwd: workspacePath });
-  if (!parentOutcome.ok) {
-    return { ok: false, reason: "inspection_failed", stage: "resolve_parent", gitErrorCode: parentOutcome.code };
-  }
-  const actualParentSha = parentOutcome.stdout.trim();
-  if (actualParentSha !== expectedParentSha) {
-    return { ok: false, reason: "parent_mismatch", expectedParentSha, actualParentSha };
-  }
-
-  return { ok: true };
+export async function verifyDeliveryCommit(params: VerifyDeliveryCommitParams): Promise<VerifyDeliveryCommitOutcome> {
+  return verifyGitCommitTopology(params);
 }
 
 export interface EnsureAdaDeliveryCommitRequest {

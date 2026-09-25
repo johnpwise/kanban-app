@@ -9,6 +9,45 @@ export type ClaimExecutionRunOutcome = { claimed: true } | { claimed: false; rea
 
 export type RecordSourceRevisionOutcome = { outcome: "created" } | { outcome: "already_recorded" } | { outcome: "conflict" };
 
+export type RecordDeliveryOutcome = { outcome: "created" } | { outcome: "already_recorded" } | { outcome: "conflict" };
+
+export type RecordCiResultOutcome = { outcome: "created" } | { outcome: "already_recorded" } | { outcome: "conflict" };
+
+export type RecordMergeResultOutcome =
+  | { outcome: "created" }
+  | { outcome: "already_recorded" }
+  | { outcome: "conflict" }
+  | { outcome: "lifecycle_conflict" };
+
+export interface DeliveryPullRequestIdentity {
+  number: number;
+  htmlUrl: string;
+}
+
+export interface DeliveryIdentity {
+  branch: string;
+  commitSha: string;
+  pullRequest?: DeliveryPullRequestIdentity;
+}
+
+export interface CiResult {
+  /** The exact verified ADA delivery commit this terminal result is anchored to — never
+   * `sourceRevision.headSha`, a branch, or a PR. */
+  commitSha: string;
+  state: "succeeded" | "failed";
+  runId: number;
+  htmlUrl: string;
+  conclusion?: string;
+}
+
+export interface MergeResultIdentity {
+  /** The exact verified ADA delivery commit that was merged — never `sourceRevision.headSha`. */
+  deliveryCommitSha: string;
+  pullRequestNumber: number;
+  /** GitHub's own merge commit identity — distinct from `deliveryCommitSha`. */
+  mergeCommitSha: string;
+}
+
 export interface ExecutionRunRepository {
   /** Returns the raw document data, or `undefined` if no such document exists. Never writes. */
   loadExecutionRunData(executionRunId: string): Promise<unknown | undefined>;
@@ -34,6 +73,56 @@ export interface ExecutionRunRepository {
    * inside a single Firestore transaction, same as `claimExecutionRun`.
    */
   recordSourceRevision(executionRunId: string, headSha: string): Promise<RecordSourceRevisionOutcome>;
+  /**
+   * Durably records ADA's independently-verified GitHub delivery on `executionRuns/{executionRunId}`:
+   * if no `delivery` is present yet, sets `{ branch, commitSha, recordedAt, pullRequest? }` and
+   * returns `{ outcome: "created" }`; if one is already present with the same `branch` and
+   * `commitSha` (this call or a concurrent one committed first), returns
+   * `{ outcome: "already_recorded" }` without writing — an already-recorded `pullRequest` is never
+   * overwritten by a later call, even one supplying different/no `pullRequest` data; if one is
+   * already present with a *different* `branch` or `commitSha`, returns `{ outcome: "conflict" }`
+   * without writing. A missing document at write time is treated the same as a conflict, mirroring
+   * `recordSourceRevision`. Read-check-write happens inside a single Firestore transaction, same as
+   * `recordSourceRevision`.
+   */
+  recordDelivery(executionRunId: string, delivery: DeliveryIdentity): Promise<RecordDeliveryOutcome>;
+  /**
+   * Durably records a terminal GitHub Actions CI result on `executionRuns/{executionRunId}`
+   * together with the minimum lifecycle `status` transition (`ci_succeeded` / `ci_failed`) — one
+   * Firestore transaction, so no reader ever observes `ci` written without the matching `status`
+   * or vice versa. Idempotency identity is `(commitSha, state)`: if no `ci` is present yet, sets
+   * `{ commitSha, state, runId, htmlUrl, conclusion?, recordedAt }` and the matching `status`,
+   * returning `{ outcome: "created" }`; if one is already present with the same `commitSha` and
+   * `state` (this call or a concurrent one committed first), returns
+   * `{ outcome: "already_recorded" }` without writing — `runId`/`htmlUrl`/`conclusion` are
+   * recorded once and never re-verified on repeat calls, mirroring `recordDelivery`'s treatment of
+   * `pullRequest`; if one is already present with a *different* `commitSha`, or the *same*
+   * `commitSha` but a *different* `state`, returns `{ outcome: "conflict" }` without writing — an
+   * established terminal result is never silently overwritten. A missing document at write time is
+   * treated the same as a conflict, mirroring `recordSourceRevision`/`recordDelivery`.
+   */
+  recordCiResult(executionRunId: string, result: CiResult): Promise<RecordCiResultOutcome>;
+  /**
+   * Durably records a successful ADA Pull Request merge on `executionRuns/{executionRunId}`
+   * together with the minimum lifecycle `status` transition (`merged`) — one Firestore
+   * transaction, so no reader ever observes `merge` written without the matching `status` or vice
+   * versa. Idempotency identity is `(deliveryCommitSha, pullRequestNumber, mergeCommitSha)`: if no
+   * `merge` is present yet and the run's `status` is exactly `ci_succeeded` (the only status a
+   * merge can legitimately follow), sets `{ deliveryCommitSha, pullRequestNumber, mergeCommitSha,
+   * recordedAt }` and `status: "merged"`, returning `{ outcome: "created" }`; if one is already
+   * present with the identical identity (this call or a concurrent one committed first), returns
+   * `{ outcome: "already_recorded" }` without writing; if one is already present with a *different*
+   * `deliveryCommitSha`, `pullRequestNumber`, or `mergeCommitSha`, returns `{ outcome: "conflict" }`
+   * without writing — an established merge result is never silently overwritten. A missing document
+   * at write time is treated the same as a conflict, mirroring `recordSourceRevision` /
+   * `recordDelivery` / `recordCiResult`. Distinct from an ordinary identity conflict:
+   * `{ outcome: "lifecycle_conflict" }` when no `merge` exists yet but `status` is not
+   * `ci_succeeded` (e.g. `accepted` or `ci_failed` — a merge can never legitimately follow those) —
+   * a defensive fail-closed refusal to record a merge the document's own lifecycle state
+   * contradicts. Read-check-write happens inside a single Firestore transaction, same as
+   * `recordCiResult`.
+   */
+  recordMergeResult(executionRunId: string, result: MergeResultIdentity): Promise<RecordMergeResultOutcome>;
 }
 
 let firestore: Firestore | undefined;
@@ -101,6 +190,114 @@ export function createFirestoreExecutionRunRepository(): ExecutionRunRepository 
           return { outcome: "created" };
         }
         if (existingSourceRevision.headSha === headSha) {
+          return { outcome: "already_recorded" };
+        }
+        return { outcome: "conflict" };
+      });
+    },
+
+    async recordDelivery(executionRunId: string, delivery: DeliveryIdentity) {
+      const firestore = getExecutionRunFirestore();
+      const docRef = firestore.collection(EXECUTION_RUNS_COLLECTION).doc(executionRunId);
+
+      return firestore.runTransaction<RecordDeliveryOutcome>(async (transaction) => {
+        const snapshot = await transaction.get(docRef);
+        const existingDelivery = (
+          snapshot.data() as { delivery?: { branch?: unknown; commitSha?: unknown } } | undefined
+        )?.delivery;
+
+        if (!snapshot.exists) {
+          return { outcome: "conflict" };
+        }
+        if (!existingDelivery) {
+          transaction.update(docRef, {
+            delivery: {
+              branch: delivery.branch,
+              commitSha: delivery.commitSha,
+              recordedAt: FieldValue.serverTimestamp(),
+              ...(delivery.pullRequest ? { pullRequest: delivery.pullRequest } : {}),
+            },
+          });
+          return { outcome: "created" };
+        }
+        if (existingDelivery.branch === delivery.branch && existingDelivery.commitSha === delivery.commitSha) {
+          return { outcome: "already_recorded" };
+        }
+        return { outcome: "conflict" };
+      });
+    },
+
+    async recordCiResult(executionRunId: string, result: CiResult) {
+      const firestore = getExecutionRunFirestore();
+      const docRef = firestore.collection(EXECUTION_RUNS_COLLECTION).doc(executionRunId);
+      const status = result.state === "succeeded" ? "ci_succeeded" : "ci_failed";
+
+      return firestore.runTransaction<RecordCiResultOutcome>(async (transaction) => {
+        const snapshot = await transaction.get(docRef);
+        const existingCi = (
+          snapshot.data() as { ci?: { commitSha?: unknown; state?: unknown } } | undefined
+        )?.ci;
+
+        if (!snapshot.exists) {
+          return { outcome: "conflict" };
+        }
+        if (!existingCi) {
+          transaction.update(docRef, {
+            ci: {
+              commitSha: result.commitSha,
+              state: result.state,
+              runId: result.runId,
+              htmlUrl: result.htmlUrl,
+              recordedAt: FieldValue.serverTimestamp(),
+              ...(result.conclusion ? { conclusion: result.conclusion } : {}),
+            },
+            status,
+          });
+          return { outcome: "created" };
+        }
+        if (existingCi.commitSha === result.commitSha && existingCi.state === result.state) {
+          return { outcome: "already_recorded" };
+        }
+        return { outcome: "conflict" };
+      });
+    },
+
+    async recordMergeResult(executionRunId: string, result: MergeResultIdentity) {
+      const firestore = getExecutionRunFirestore();
+      const docRef = firestore.collection(EXECUTION_RUNS_COLLECTION).doc(executionRunId);
+
+      return firestore.runTransaction<RecordMergeResultOutcome>(async (transaction) => {
+        const snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) {
+          return { outcome: "conflict" };
+        }
+
+        const existingData = snapshot.data() as
+          | { status?: unknown; merge?: { deliveryCommitSha?: unknown; pullRequestNumber?: unknown; mergeCommitSha?: unknown } }
+          | undefined;
+        const existingMerge = existingData?.merge;
+
+        if (!existingMerge) {
+          if (existingData?.status !== "ci_succeeded") {
+            return { outcome: "lifecycle_conflict" };
+          }
+          transaction.update(docRef, {
+            merge: {
+              deliveryCommitSha: result.deliveryCommitSha,
+              pullRequestNumber: result.pullRequestNumber,
+              mergeCommitSha: result.mergeCommitSha,
+              recordedAt: FieldValue.serverTimestamp(),
+            },
+            status: "merged",
+          });
+          return { outcome: "created" };
+        }
+
+        if (
+          existingMerge.deliveryCommitSha === result.deliveryCommitSha &&
+          existingMerge.pullRequestNumber === result.pullRequestNumber &&
+          existingMerge.mergeCommitSha === result.mergeCommitSha
+        ) {
           return { outcome: "already_recorded" };
         }
         return { outcome: "conflict" };

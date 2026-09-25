@@ -41,9 +41,22 @@ When a workflow trigger is present:
 3. No valid block → fail closed, request a reissue with the required format.
 4. More than one valid block, or conflicting blocks → fail closed, request a single-block reissue.
 5. Incomplete trigger text or metadata → request a corrected reissue before any edits.
-6. Do not implement code directly from intake. Your first output establishes workflow owner,
-   `workflow_id`, and the first persisted artifact path.
-7. Stay fail-closed until `.agent-workflows/<workflow_id>/index.md` and the first step record are
+6. Complete the mandatory work-branch preflight before creating a workflow artifact or editing any
+   test or production file:
+   - require a clean working tree; otherwise stop and report the uncommitted files;
+   - fetch `origin/develop`; if it is unavailable, stop and report the exact Git failure;
+   - switch to local `develop` (create a tracking branch from `origin/develop` if it is absent),
+     then run `git pull --ff-only origin develop`; stop on any failure or divergence and never
+     merge, rebase, reset, or discard work;
+   - derive a concise Git-safe lowercase kebab-case slug from the normalized request summary; stop
+     if no usable slug can be derived;
+   - select `feature/<slug>` for `New Feature` or `bugfix/<slug>` for `Bug Fix`; stop if that name
+     exists locally or on `origin`, and never reuse or auto-suffix it;
+   - create the new branch from synchronized `develop`, without pushing an empty branch.
+7. Do not implement code directly from intake. Your first output establishes workflow owner,
+   `workflow_id`, branch name, synchronized `develop` base SHA, preflight command evidence, and
+   the first persisted artifact path.
+8. Stay fail-closed until `.agent-workflows/<workflow_id>/index.md` and the first step record are
    persisted.
 
 Feature intake requires `New Feature`; bug intake requires `Bug Fix`. Use the active stack's

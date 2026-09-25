@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { describe, expect, it, vi } from "vitest";
 
+import { AdaCodexModelConfigError } from "./adaCodexModelPolicy";
 import { launchExecutionRun } from "./launchExecutionRun";
 
 import type { LaunchAdaExecutorJob, LaunchAdaExecutorJobResult } from "./launchExecutionRun";
@@ -186,5 +187,47 @@ describe("launchExecutionRun", () => {
     });
 
     expect(logger.error).toHaveBeenCalled();
+  });
+
+  it("classifies a fail-closed Codex model configuration error as invalid-configuration and acknowledges without retry", async () => {
+    const launchJob: LaunchAdaExecutorJob = vi
+      .fn()
+      .mockRejectedValue(new AdaCodexModelConfigError("CODEX_MODEL must be one of: gpt-5.6-luna, gpt-5.6-terra."));
+    const logger = fakeLogger();
+
+    await launchExecutionRun({
+      documentId: "req-1",
+      data: validRunDocument(),
+      eventId: "event-1",
+      launchJob,
+      logger,
+    });
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ classification: "invalid-configuration" }),
+    );
+  });
+
+  it("never logs a Codex model configuration error's message (may echo the rejected value, kept out of structured log fields)", async () => {
+    const launchJob: LaunchAdaExecutorJob = vi
+      .fn()
+      .mockRejectedValue(new AdaCodexModelConfigError("CODEX_MODEL must be one of: gpt-5.6-luna, gpt-5.6-terra."));
+    const logger = fakeLogger();
+
+    await launchExecutionRun({
+      documentId: "req-1",
+      data: validRunDocument(),
+      eventId: "event-1",
+      launchJob,
+      logger,
+    });
+
+    const allLoggedMeta = [...logger.info.mock.calls, ...logger.warn.mock.calls, ...logger.error.mock.calls].map(
+      (call) => JSON.stringify(call),
+    );
+    for (const entry of allLoggedMeta) {
+      expect(entry).not.toContain("must be one of");
+    }
   });
 });

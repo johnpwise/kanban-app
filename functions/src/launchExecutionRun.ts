@@ -1,3 +1,4 @@
+import { AdaCodexModelConfigError } from "./adaCodexModelPolicy";
 import { executionRunDocumentSchema } from "./schemas/executionRunDocument";
 
 export interface LaunchAdaExecutorJobResult {
@@ -43,7 +44,18 @@ const PERMANENT_ERROR_CLASSIFICATION_BY_GRPC_CODE: Record<number, LaunchErrorCla
   9: "invalid-configuration",
 };
 
+/**
+ * A fail-closed `AdaCodexModelConfigError` is thrown by `launchAdaExecutorJob` before it ever calls
+ * the Cloud Run Admin API (see `adaExecutorJobLauncher.ts`), so it carries no gRPC `.code` — it is
+ * recognized directly, ahead of the gRPC-code check below, and classified the same way a permanent
+ * `INVALID_ARGUMENT`/`FAILED_PRECONDITION` Cloud Run error already is: retrying it can never
+ * succeed without an operator fixing the approved model configuration.
+ */
 function classifyLaunchError(error: unknown): LaunchErrorClassification | "transient" {
+  if (error instanceof AdaCodexModelConfigError) {
+    return "invalid-configuration";
+  }
+
   const code = (error as { code?: unknown } | null)?.code;
   if (typeof code === "number" && code in PERMANENT_ERROR_CLASSIFICATION_BY_GRPC_CODE) {
     return PERMANENT_ERROR_CLASSIFICATION_BY_GRPC_CODE[code];

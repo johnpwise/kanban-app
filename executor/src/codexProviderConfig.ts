@@ -13,10 +13,15 @@ const DEFAULT_TIMEOUT_MS = 600_000;
  */
 const CODEX_BASE_ARGS = ["--ask-for-approval", "never", "exec", "-", "--sandbox", "workspace-write"] as const;
 
+const CODEX_REASONING_EFFORT_VALUES = ["low", "medium", "high", "xhigh", "max"] as const;
+
 const codexProviderEnvSchema = z.object({
   CODEX_API_KEY: z.string().trim().min(1, "CODEX_API_KEY is required."),
   CODEX_COMMAND: z.string().trim().min(1).optional(),
-  CODEX_MODEL: z.string().trim().min(1).optional(),
+  // Required (not optional): an unset model must fail closed at config validation instead of
+  // silently falling back to whatever model the Codex CLI itself defaults to.
+  CODEX_MODEL: z.string().trim().min(1, "CODEX_MODEL is required."),
+  CODEX_REASONING_EFFORT: z.enum(CODEX_REASONING_EFFORT_VALUES).optional(),
   CODEX_TIMEOUT_MS: z
     .string()
     .optional()
@@ -56,12 +61,18 @@ export function parseCodexProviderConfig(env: Record<string, string | undefined>
     CODEX_API_KEY: env.CODEX_API_KEY,
     CODEX_COMMAND: env.CODEX_COMMAND,
     CODEX_MODEL: env.CODEX_MODEL,
+    CODEX_REASONING_EFFORT: env.CODEX_REASONING_EFFORT,
     CODEX_TIMEOUT_MS: env.CODEX_TIMEOUT_MS,
   });
 
+  const args = [...CODEX_BASE_ARGS, "--model", parsed.CODEX_MODEL];
+  if (parsed.CODEX_REASONING_EFFORT) {
+    args.push("-c", `model_reasoning_effort=${parsed.CODEX_REASONING_EFFORT}`);
+  }
+
   return {
     command: parsed.CODEX_COMMAND ?? DEFAULT_COMMAND,
-    args: parsed.CODEX_MODEL ? [...CODEX_BASE_ARGS, "--model", parsed.CODEX_MODEL] : [...CODEX_BASE_ARGS],
+    args,
     timeoutMs: parsed.CODEX_TIMEOUT_MS,
     env: {
       CODEX_API_KEY: parsed.CODEX_API_KEY,

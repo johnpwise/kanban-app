@@ -1,4 +1,4 @@
-import { createGitAskpassScript, removeGitAskpassScript } from "./gitAskpassHelper";
+import { pushVerifiedCommitToBranch } from "./gitPushOperations";
 
 import type { MintGithubDeliveryCredential, MintGithubDeliveryCredentialOutcome } from "./githubAppCredential";
 import type { RunGit } from "./gitProcess";
@@ -65,12 +65,6 @@ export interface EnsureAdaDeliveryPushParams extends EnsureAdaDeliveryPushReques
 /** The shape `runExecutor` depends on: `env`/`runGit`/`mintCredential` are bound once at composition time (see `main.ts`), not per call. */
 export type EnsureAdaDeliveryPush = (request: EnsureAdaDeliveryPushRequest) => Promise<EnsureAdaDeliveryPushOutcome>;
 
-function parseLsRemoteSha(stdout: string): string | null {
-  const firstLine = stdout.trim().split("\n")[0] ?? "";
-  const sha = firstLine.split(/\s+/)[0];
-  return sha ? sha : null;
-}
-
 /**
  * Publishes the verified local ADA delivery commit to GitHub and independently confirms it landed
  * — the single composed step `runExecutor` invokes once the local delivery commit is created and
@@ -90,58 +84,14 @@ export async function ensureAdaDeliveryPush({
   runGit,
   mintCredential,
 }: EnsureAdaDeliveryPushParams): Promise<EnsureAdaDeliveryPushOutcome> {
-  const credentialOutcome = await mintCredential({ repository });
-  if (!credentialOutcome.ok) {
-    return {
-      ok: false,
-      reason: "credential_unavailable",
-      credentialReason: credentialOutcome.reason,
-      ...("httpStatus" in credentialOutcome ? { httpStatus: credentialOutcome.httpStatus } : {}),
-    };
-  }
-
-  const askpassOutcome = await createGitAskpassScript();
-  if (!askpassOutcome.ok) {
-    return { ok: false, reason: "askpass_setup_failed" };
-  }
-
-  try {
-    const scopedEnv: NodeJS.ProcessEnv = {
-      PATH: env.PATH,
-      HOME: env.HOME,
-      GIT_ASKPASS: askpassOutcome.scriptPath,
-      ADA_GIT_ASKPASS_TOKEN: credentialOutcome.token,
-    };
-    const url = buildDeliveryPushUrl(repository);
-
-    const pushOutcome = await runGit({
-      args: ["push", "--no-verify", url, `${deliveryCommitSha}:refs/heads/${deliveryBranch}`],
-      cwd: workspacePath,
-      env: scopedEnv,
-    });
-    if (!pushOutcome.ok) {
-      return { ok: false, reason: "push_failed", gitErrorCode: pushOutcome.code };
-    }
-
-    const lsRemoteOutcome = await runGit({
-      args: ["ls-remote", url, `refs/heads/${deliveryBranch}`],
-      cwd: workspacePath,
-      env: scopedEnv,
-    });
-    if (!lsRemoteOutcome.ok) {
-      return { ok: false, reason: "remote_verification_failed", gitErrorCode: lsRemoteOutcome.code };
-    }
-
-    const remoteSha = parseLsRemoteSha(lsRemoteOutcome.stdout);
-    if (!remoteSha) {
-      return { ok: false, reason: "remote_ref_not_found" };
-    }
-    if (remoteSha !== deliveryCommitSha) {
-      return { ok: false, reason: "remote_sha_mismatch", expectedSha: deliveryCommitSha, actualSha: remoteSha };
-    }
-
-    return { ok: true, remoteBranch: deliveryBranch, remoteSha };
-  } finally {
-    await removeGitAskpassScript(askpassOutcome.scriptPath);
-  }
+  return pushVerifiedCommitToBranch({
+    workspacePath,
+    repository,
+    pushUrl: buildDeliveryPushUrl(repository),
+    branchName: deliveryBranch,
+    commitSha: deliveryCommitSha,
+    env,
+    runGit,
+    mintCredential,
+  });
 }

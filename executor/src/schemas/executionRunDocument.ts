@@ -62,18 +62,68 @@ const executionRunSourceRevisionSchema = z.object({
   resolvedAt: z.instanceof(Timestamp),
 });
 
+const executionRunDeliveryPullRequestSchema = z.object({
+  number: z.number(),
+  htmlUrl: z.string(),
+});
+
+/**
+ * The durable, independently-verified delivery record written by `recordDelivery` once ADA's
+ * GitHub push is confirmed (see `executionRunRepository.ts`). Executor-only, like `claim` /
+ * `sourceRevision` — not modelled on the Functions side.
+ */
+const executionRunDeliverySchema = z.object({
+  branch: z.string().min(1),
+  commitSha: z.string().min(1),
+  recordedAt: z.instanceof(Timestamp),
+  pullRequest: executionRunDeliveryPullRequestSchema.optional(),
+});
+
+/**
+ * The durable, independently-anchored terminal CI result written by `recordCiResult` once the
+ * bounded CI controller (`deliveryCiController.ts`) observes a genuine terminal GitHub Actions
+ * outcome for the exact `delivery.commitSha` (see `executionRunRepository.ts`). Executor-only,
+ * like `claim` / `sourceRevision` / `delivery` — not modelled on the Functions side, which never
+ * re-validates a document once these executor-owned fields exist.
+ */
+const executionRunCiSchema = z.object({
+  commitSha: z.string().min(1),
+  state: z.enum(["succeeded", "failed"]),
+  runId: z.number(),
+  htmlUrl: z.string(),
+  conclusion: z.string().min(1).optional(),
+  recordedAt: z.instanceof(Timestamp),
+});
+
+/**
+ * The durable, safely-reconciled merge completion record written by `recordMergeResult` once ADA's
+ * guarded GitHub Pull Request merge is confirmed — either freshly performed or safely recovered
+ * from an already-merged PR (see `executionRunRepository.ts` / `mergeCompletionController.ts`).
+ * Executor-only, like `claim` / `sourceRevision` / `delivery` / `ci` — not modelled on the
+ * Functions side, which never re-validates a document once these executor-owned fields exist.
+ */
+const executionRunMergeSchema = z.object({
+  deliveryCommitSha: z.string().min(1),
+  pullRequestNumber: z.number(),
+  mergeCommitSha: z.string().min(1),
+  recordedAt: z.instanceof(Timestamp),
+});
+
 /** Shape of an `executionRuns/{executionRequestId}` Firestore document's data. */
 const executionRunDocumentSchema = z.object({
   executionRequestId: z.string().min(1),
   correlationId: z.string().min(1),
   projectId: projectIdSchema,
   cardId: z.string().min(1),
-  status: z.literal("accepted"),
+  status: z.enum(["accepted", "ci_succeeded", "ci_failed", "merged"]),
   acceptedAt: z.instanceof(Timestamp),
   firstMessageId: z.string().min(1).optional(),
   input: executionRunInputSchema,
   claim: executionRunClaimSchema.optional(),
   sourceRevision: executionRunSourceRevisionSchema.optional(),
+  delivery: executionRunDeliverySchema.optional(),
+  ci: executionRunCiSchema.optional(),
+  merge: executionRunMergeSchema.optional(),
 });
 
 export type ExecutionRunInput = z.infer<typeof executionRunInputSchema>;

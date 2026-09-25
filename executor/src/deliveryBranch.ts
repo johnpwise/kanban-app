@@ -1,4 +1,9 @@
+import { createGitBranch, validateGitBranchName, verifyCheckedOutBranch } from "./gitBranchOperations";
+
 import type { RunGit } from "./gitProcess";
+
+export { validateGitBranchName } from "./gitBranchOperations";
+export type { ValidateGitBranchNameOutcome, ValidateGitBranchNameParams, ValidateGitBranchNameRequest } from "./gitBranchOperations";
 
 /**
  * Fixed, ADA-owned namespace prefix. Guarantees the derived branch name can never begin with `-`
@@ -16,39 +21,6 @@ const ADA_DELIVERY_BRANCH_NAMESPACE = "ada/";
  */
 export function deriveDeliveryBranchName(executionRequestId: string): string {
   return `${ADA_DELIVERY_BRANCH_NAMESPACE}${executionRequestId}`;
-}
-
-export interface ValidateGitBranchNameRequest {
-  branchName: string;
-}
-
-export type ValidateGitBranchNameOutcome =
-  | { ok: true }
-  | {
-      ok: false;
-      reason: "invalid_ref_format";
-      /** The failing git command's exit code (e.g. 1) or spawn error code — never stderr. Safe to log. */
-      gitErrorCode: number | string | null;
-    };
-
-export interface ValidateGitBranchNameParams extends ValidateGitBranchNameRequest {
-  runGit: RunGit;
-}
-
-/**
- * Confirms `branchName` is a valid Git ref using git's own `check-ref-format` rather than
- * reimplementing git's ref-name rules. Checked as a full `refs/heads/<branchName>` ref, with no
- * `cwd` — this is a format check, not a repository-scoped operation.
- */
-export async function validateGitBranchName({
-  branchName,
-  runGit,
-}: ValidateGitBranchNameParams): Promise<ValidateGitBranchNameOutcome> {
-  const outcome = await runGit({ args: ["check-ref-format", `refs/heads/${branchName}`] });
-  if (!outcome.ok) {
-    return { ok: false, reason: "invalid_ref_format", gitErrorCode: outcome.code };
-  }
-  return { ok: true };
 }
 
 export interface CreateDeliveryBranchRequest {
@@ -76,16 +48,8 @@ export interface CreateDeliveryBranchParams extends CreateDeliveryBranchRequest 
  * tracked modifications and untracked files are left exactly as they were. Only ever runs this one
  * fixed `checkout -b` subcommand; never `add`, `commit`, `reset`, `clean`, or `stash`.
  */
-export async function createDeliveryBranch({
-  workspacePath,
-  branchName,
-  runGit,
-}: CreateDeliveryBranchParams): Promise<CreateDeliveryBranchOutcome> {
-  const outcome = await runGit({ args: ["checkout", "-b", branchName], cwd: workspacePath });
-  if (!outcome.ok) {
-    return { ok: false, reason: "branch_creation_failed", gitErrorCode: outcome.code };
-  }
-  return { ok: true };
+export async function createDeliveryBranch(params: CreateDeliveryBranchParams): Promise<CreateDeliveryBranchOutcome> {
+  return createGitBranch(params);
 }
 
 export interface VerifyDeliveryBranchRequest {
@@ -119,20 +83,8 @@ export interface VerifyDeliveryBranchParams extends VerifyDeliveryBranchRequest 
  * `git rev-parse --abbrev-ref HEAD` check used by `verifyGitIntegrity`. Never attempts to repair a
  * mismatch; reports it as a safe failure outcome.
  */
-export async function verifyDeliveryBranch({
-  workspacePath,
-  expectedBranch,
-  runGit,
-}: VerifyDeliveryBranchParams): Promise<VerifyDeliveryBranchOutcome> {
-  const outcome = await runGit({ args: ["rev-parse", "--abbrev-ref", "HEAD"], cwd: workspacePath });
-  if (!outcome.ok) {
-    return { ok: false, reason: "inspection_failed", gitErrorCode: outcome.code };
-  }
-  const actualBranch = outcome.stdout.trim();
-  if (actualBranch !== expectedBranch) {
-    return { ok: false, reason: "branch_mismatch", expectedBranch, actualBranch };
-  }
-  return { ok: true };
+export async function verifyDeliveryBranch(params: VerifyDeliveryBranchParams): Promise<VerifyDeliveryBranchOutcome> {
+  return verifyCheckedOutBranch(params);
 }
 
 export interface EnsureAdaDeliveryBranchRequest {

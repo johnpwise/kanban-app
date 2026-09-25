@@ -432,6 +432,36 @@ export async function runExecutor({
             );
           }
         }
+
+        const deliveryPersistenceIdentifiers = {
+          ...safeIdentifiers,
+          deliveryBranch: remoteDelivery.remoteBranch,
+          deliveryCommitSha: remoteDelivery.remoteSha,
+        };
+        let recordDeliveryOutcome;
+        try {
+          recordDeliveryOutcome = await repository.recordDelivery(executionRunId, {
+            branch: remoteDelivery.remoteBranch,
+            commitSha: remoteDelivery.remoteSha,
+            ...(pullRequest && pullRequest.status !== "failed"
+              ? { pullRequest: { number: pullRequest.number, htmlUrl: pullRequest.htmlUrl } }
+              : {}),
+          });
+        } catch {
+          logger.error(
+            "Unexpected failure durably persisting the verified ADA delivery.",
+            deliveryPersistenceIdentifiers,
+          );
+          return { ok: false, reason: "delivery_persistence_error" };
+        }
+
+        if (recordDeliveryOutcome.outcome === "conflict") {
+          logger.error(
+            "A conflicting delivery identity is already durably persisted for this execution run.",
+            deliveryPersistenceIdentifiers,
+          );
+          return { ok: false, reason: "delivery_persistence_conflict" };
+        }
       } else {
         remoteDelivery = { status: "failed", reason: deliveryPushOutcome.reason };
         logger.error("Failed to durably publish the ADA delivery branch; the local delivery commit remains valid.", {

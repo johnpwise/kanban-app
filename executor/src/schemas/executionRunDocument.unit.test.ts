@@ -231,4 +231,76 @@ describe("parseExecutionRunDocument", () => {
     // Assert
     expect(act).toThrow();
   });
+
+  it("accepts a merged document that already carries a durable merge record", () => {
+    // Arrange
+    const data = {
+      ...validData(),
+      status: "merged",
+      merge: {
+        deliveryCommitSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        pullRequestNumber: 42,
+        mergeCommitSha: "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff",
+        recordedAt: Timestamp.now(),
+      },
+    };
+
+    // Act
+    const result = parseExecutionRunDocument("req-1", data);
+
+    // Assert
+    expect(result.status).toBe("merged");
+    expect(result.merge).toMatchObject({ deliveryCommitSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", pullRequestNumber: 42 });
+  });
+
+  it("accepts a document without a merge record (not yet merged)", () => {
+    // Arrange
+    const data = validData();
+
+    // Act
+    const act = () => parseExecutionRunDocument("req-1", data);
+
+    // Assert
+    expect(act).not.toThrow();
+  });
+
+  it("rejects a merge record with an empty deliveryCommitSha", () => {
+    // Arrange
+    const data = {
+      ...validData(),
+      status: "merged",
+      merge: {
+        deliveryCommitSha: "",
+        pullRequestNumber: 42,
+        mergeCommitSha: "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff",
+        recordedAt: Timestamp.now(),
+      },
+    };
+
+    // Act
+    const act = () => parseExecutionRunDocument("req-1", data);
+
+    // Assert
+    expect(act).toThrow();
+  });
+
+  it("rejects a merge record with a non-Timestamp recordedAt", () => {
+    // Arrange
+    const data = {
+      ...validData(),
+      status: "merged",
+      merge: {
+        deliveryCommitSha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        pullRequestNumber: 42,
+        mergeCommitSha: "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff",
+        recordedAt: new Date().toISOString(),
+      },
+    };
+
+    // Act
+    const act = () => parseExecutionRunDocument("req-1", data);
+
+    // Assert
+    expect(act).toThrow();
+  });
 });
