@@ -4,7 +4,9 @@ import * as logger from "firebase-functions/logger";
 
 import { launchAdaCiControllerJob, launchAdaCiControllerJobInEmulator } from "./adaCiControllerJobLauncher";
 import { launchAdaExecutorJob, launchAdaExecutorJobInEmulator } from "./adaExecutorJobLauncher";
+import { launchAdaMergeControllerJob, launchAdaMergeControllerJobInEmulator } from "./adaMergeControllerJobLauncher";
 import { createFirestoreExecutionRunTransaction } from "./firestoreExecutionRunTransaction";
+import { launchAdaMergeControl } from "./launchAdaMergeControl";
 import { launchDeliveryCiControl } from "./launchDeliveryCiControl";
 import { launchExecutionRun } from "./launchExecutionRun";
 import { handleAdaExecutionRequestPublished } from "./onAdaExecutionRequestPublished";
@@ -126,6 +128,52 @@ export const launchAdaDeliveryCiControl = onDocumentUpdated(
       // Run Admin API.
       launchJob:
         process.env.FUNCTIONS_EMULATOR === "true" ? launchAdaCiControllerJobInEmulator : launchAdaCiControllerJob,
+      logger,
+    });
+  },
+);
+
+/**
+ * Separate again from every trigger above: this one observes the *update* that follows a
+ * successful CI observation (`status` becoming `ci_succeeded`, recorded by
+ * `executor/src/deliveryCiController.ts` via `recordCiResult`) and launches the separate
+ * `ada-merge-controller` Job, which re-verifies merge eligibility against fresh GitHub state
+ * before performing the guarded one-shot merge (see `executor/src/mergeCompletionController.ts`).
+ * Most updates on this document are not that transition (`claim`, `sourceRevision`, `delivery`,
+ * and later `merge` writes all pass through the same trigger, as does a transition into
+ * `ci_failed`, which must never launch merge completion); `launchAdaMergeControl` fails closed to
+ * a no-launch skip for all of them via `isCiSucceededEligibleForMergeControl`. Region matches the
+ * other triggers for the same reason (co-located with the Firestore database they read from).
+ */
+export const launchAdaMergeCompletion = onDocumentUpdated(
+  {
+    document: "executionRuns/{executionRequestId}",
+    region: "europe-west2",
+    // A transient Cloud Run API failure is rethrown by launchAdaMergeControl so Firebase retries
+    // the event; redelivery is safe even though it is not a genuine eligibility re-check — a
+    // redelivered launch converges on the same durable merge-identity idempotency contract in
+    // `recordMergeResult`, not a new dedup mechanism here.
+    // https://firebase.google.com/docs/functions/retries
+    retry: true,
+    // Must run as the SA granted `roles/run.jobsExecutorWithOverrides` on the `ada-merge-controller`
+    // Cloud Run Job. Reuses the same `ada-launcher-runtime` identity as the other launchers above;
+    // granting it that additional binding on the new Job is a live IAM mutation, deferred to an
+    // explicit approval boundary (not performed by this code change).
+    serviceAccount: "ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com",
+  },
+  async (event) => {
+    await launchAdaMergeControl({
+      documentId: event.params.executionRequestId,
+      before: event.data?.before.data(),
+      after: event.data?.after.data(),
+      eventId: event.id,
+      // Same emulator guard as the other launchers above, and for the same reason: emulator-backed
+      // integration tests write to executionRuns/{id} directly and must never reach the real Cloud
+      // Run Admin API.
+      launchJob:
+        process.env.FUNCTIONS_EMULATOR === "true"
+          ? launchAdaMergeControllerJobInEmulator
+          : launchAdaMergeControllerJob,
       logger,
     });
   },
