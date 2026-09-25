@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { exitCodeForCiControllerOutcome, exitCodeForMergeControllerOutcome, exitCodeForOutcome } from "./exitCode";
+import {
+  exitCodeForCiControllerOutcome,
+  exitCodeForMergeControllerOutcome,
+  exitCodeForOutcome,
+  exitCodeForReleaseControllerOutcome,
+} from "./exitCode";
 
 describe("exitCodeForOutcome", () => {
   it("returns 0 for a successful outcome", () => {
@@ -147,6 +152,73 @@ describe("exitCodeForMergeControllerOutcome", () => {
 
     // Act
     const code = exitCodeForMergeControllerOutcome(outcome);
+
+    // Assert
+    expect(code).not.toBe(0);
+  });
+});
+
+describe("exitCodeForReleaseControllerOutcome", () => {
+  it("returns 0 for a freshly completed release-start", () => {
+    // Arrange
+    const outcome = {
+      outcome: "started" as const,
+      releaseIntentId: "johnpwise__kanban-app--0.2.0",
+      repository: "johnpwise/kanban-app",
+      version: "0.2.0",
+      sourceBranch: "develop",
+      sourceRevision: "a".repeat(40),
+      releaseBranch: "release/0.2.0",
+      commitSha: "b".repeat(40),
+    };
+
+    // Act
+    const code = exitCodeForReleaseControllerOutcome(outcome);
+
+    // Assert
+    expect(code).toBe(0);
+  });
+
+  it("returns 0 for an idempotently converged already-recorded release-start", () => {
+    // Arrange
+    const outcome = {
+      outcome: "release_start_already_recorded" as const,
+      releaseIntentId: "johnpwise__kanban-app--0.2.0",
+      repository: "johnpwise/kanban-app",
+      version: "0.2.0",
+      sourceBranch: "develop",
+      sourceRevision: "a".repeat(40),
+      releaseBranch: "release/0.2.0",
+      commitSha: "b".repeat(40),
+    };
+
+    // Act
+    const code = exitCodeForReleaseControllerOutcome(outcome);
+
+    // Assert
+    expect(code).toBe(0);
+  });
+
+  it("returns a non-zero code when release-start persistence fails", () => {
+    // Arrange
+    const outcome = { outcome: "release_start_persistence_error" as const, releaseIntentId: "id-1" };
+
+    // Act
+    const code = exitCodeForReleaseControllerOutcome(outcome);
+
+    // Assert
+    expect(code).not.toBe(0);
+  });
+
+  it("returns a non-zero code when the release intent could not be resolved/recorded", () => {
+    // Arrange
+    const outcome = {
+      outcome: "release_intent_resolution_source_branch_observation_error" as const,
+      releaseIntentId: "id-1",
+    };
+
+    // Act
+    const code = exitCodeForReleaseControllerOutcome(outcome);
 
     // Assert
     expect(code).not.toBe(0);

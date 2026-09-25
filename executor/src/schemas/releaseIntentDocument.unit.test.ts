@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   ReleaseIntentValidationError,
   deriveReleaseIntentId,
+  deriveReleaseVersionFromIntentId,
   isReleaseVersionGreaterThan,
   parseReleaseIntentDocument,
   releaseVersionSchema,
@@ -77,6 +78,29 @@ describe("parseReleaseIntentDocument", () => {
 describe("deriveReleaseIntentId", () => {
   it("joins repository and version with owner/repo's slash replaced", () => {
     expect(deriveReleaseIntentId("johnpwise/kanban-app", "0.2.0")).toBe("johnpwise__kanban-app--0.2.0");
+  });
+});
+
+describe("deriveReleaseVersionFromIntentId", () => {
+  it("decodes the version when the id's repository prefix matches the trusted repository", () => {
+    expect(deriveReleaseVersionFromIntentId("johnpwise__kanban-app--0.2.0", "johnpwise/kanban-app")).toBe("0.2.0");
+  });
+
+  it("returns undefined when the id's repository prefix does not match the trusted repository", () => {
+    expect(deriveReleaseVersionFromIntentId("someone-else__other-repo--0.2.0", "johnpwise/kanban-app")).toBeUndefined();
+  });
+
+  it("returns undefined when the remainder after the prefix is not a valid plain version", () => {
+    expect(deriveReleaseVersionFromIntentId("johnpwise__kanban-app--v0.2.0", "johnpwise/kanban-app")).toBeUndefined();
+  });
+
+  it("returns undefined for an id with no matching prefix at all", () => {
+    expect(deriveReleaseVersionFromIntentId("not-a-release-intent-id", "johnpwise/kanban-app")).toBeUndefined();
+  });
+
+  it("round-trips through deriveReleaseIntentId", () => {
+    const id = deriveReleaseIntentId("johnpwise/kanban-app", "3.4.5");
+    expect(deriveReleaseVersionFromIntentId(id, "johnpwise/kanban-app")).toBe("3.4.5");
   });
 });
 
