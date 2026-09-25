@@ -28,7 +28,21 @@ export type MergeEligibilityOutcome =
   | { eligible: false; reason: "ci_delivery_sha_mismatch" }
   | { eligible: false; reason: "pull_request_observation_error" }
   | ({ eligible: false } & Omit<ObservationFailure, "ok">)
-  | { eligible: false; reason: "pull_request_already_merged" }
+  | {
+      eligible: false;
+      reason: "pull_request_already_merged";
+      executionRunId: string;
+      repository: string;
+      pullRequestNumber: number;
+      /** The verified ADA delivery commit this recovery is anchored to — distinct from `mergeCommitSha`. */
+      deliveryCommitSha: string;
+      /** GitHub's merge commit identity, recovered from the live already-merged PR. */
+      mergeCommitSha: string;
+    }
+  | { eligible: false; reason: "pull_request_already_merged_head_sha_mismatch" }
+  | { eligible: false; reason: "pull_request_already_merged_head_branch_mismatch" }
+  | { eligible: false; reason: "pull_request_already_merged_base_branch_mismatch" }
+  | { eligible: false; reason: "pull_request_already_merged_commit_sha_missing" }
   | { eligible: false; reason: "pull_request_closed" }
   | { eligible: false; reason: "pull_request_draft" }
   | { eligible: false; reason: "pull_request_repository_mismatch" }
@@ -51,12 +65,24 @@ export type MergeEligibilityOutcome =
  *    closed here, before any GitHub call.
  * 2. **Live GitHub reconciliation** — the exact `delivery.pullRequest.number` (never a PR
  *    rediscovered by branch) is fetched via `observePullRequest`, and the response is checked
- *    against the durable identity: same-repository head/base, open, not merged, not draft, live
- *    head SHA/ref matching `delivery.commitSha`/`delivery.branch`, live base ref matching
- *    `input.baseBranch`, and a positively-established `mergeable === true`. `mergeable === null`
- *    (GitHub still computing it) fails closed as `mergeability_pending`, distinct from a genuine
- *    `mergeable === false` conflict — no polling is performed; a caller wanting a fresher read
- *    calls this again later.
+ *    against the durable identity: same-repository head/base, live head SHA/ref matching
+ *    `delivery.commitSha`/`delivery.branch`, live base ref matching `input.baseBranch`.
+ *
+ *    An already-merged PR (`merged === true`) is never treated as proof of a successful ADA merge
+ *    on its own — `merged: true` alone is not sufficient recovery evidence. It is reconciled
+ *    against the same head-SHA/head-branch/base-branch identity checks the still-open path applies
+ *    below; only full agreement (plus a non-null `mergeCommitSha` from GitHub) yields a recoverable
+ *    `pull_request_already_merged` result carrying the trusted `deliveryCommitSha` +
+ *    `mergeCommitSha` a durable persistence step can safely record. Any disagreement — head SHA,
+ *    head branch, base branch, or a merged PR with no merge commit SHA at all — fails closed with
+ *    its own distinct reason rather than becoming a successful recovery; it is never folded into
+ *    the generic already-merged outcome.
+ *
+ *    For a still-open PR: open, not draft, live head SHA/ref matching
+ *    `delivery.commitSha`/`delivery.branch`, live base ref matching `input.baseBranch`, and a
+ *    positively-established `mergeable === true`. `mergeable === null` (GitHub still computing it)
+ *    fails closed as `mergeability_pending`, distinct from a genuine `mergeable === false` conflict
+ *    — no polling is performed; a caller wanting a fresher read calls this again later.
  *
  * Read-only end-to-end: no Firestore write, no GitHub mutation. A later automatic-merge stage must
  * re-run this evaluation immediately before mutating — this result is never persisted as a
@@ -154,8 +180,32 @@ export async function evaluateMergeEligibility(params: EvaluateMergeEligibilityP
   }
 
   if (pr.merged) {
-    logger?.error("Not eligible: the pull request is already merged.", safeIdentifiers);
-    return { eligible: false, reason: "pull_request_already_merged" };
+    if (pr.headSha !== expectedCommitSha) {
+      logger?.error("Already-merged reconciliation failed: the live PR head does not match the verified delivery commit.", safeIdentifiers);
+      return { eligible: false, reason: "pull_request_already_merged_head_sha_mismatch" };
+    }
+    if (pr.headRef !== expectedBranch) {
+      logger?.error("Already-merged reconciliation failed: the live PR head branch does not match the durable delivery branch.", safeIdentifiers);
+      return { eligible: false, reason: "pull_request_already_merged_head_branch_mismatch" };
+    }
+    if (pr.baseRef !== expectedBaseBranch) {
+      logger?.error("Already-merged reconciliation failed: the live PR base branch does not match the requested base branch.", safeIdentifiers);
+      return { eligible: false, reason: "pull_request_already_merged_base_branch_mismatch" };
+    }
+    if (pr.mergeCommitSha === null) {
+      logger?.error("Already-merged reconciliation failed: GitHub reports the PR merged but supplied no merge commit SHA.", safeIdentifiers);
+      return { eligible: false, reason: "pull_request_already_merged_commit_sha_missing" };
+    }
+    logger?.info("Already merged: live pull request identity agrees with the durable ADA delivery — safe to reconcile.", safeIdentifiers);
+    return {
+      eligible: false,
+      reason: "pull_request_already_merged",
+      executionRunId,
+      repository: expectedRepository,
+      pullRequestNumber: pullRequest.number,
+      deliveryCommitSha: expectedCommitSha,
+      mergeCommitSha: pr.mergeCommitSha,
+    };
   }
 
   if (pr.state !== "open") {

@@ -33,6 +33,10 @@ export interface ObservedPullRequest {
   baseRef: string;
   baseRepositoryFullName: string;
   mergeable: boolean | null;
+  /** GitHub's own merge commit identity, present only once the pull request has actually been
+   * merged — `null` for every not-yet-merged state. The durable merge-completion boundary treats
+   * this as the sole source of the merge commit SHA; never derived any other way. */
+  mergeCommitSha: string | null;
 }
 
 export type ObserveDeliveryPullRequestOutcome =
@@ -54,6 +58,7 @@ const pullRequestResponseSchema = z.object({
   draft: z.boolean(),
   merged: z.boolean(),
   mergeable: z.boolean().nullable(),
+  merge_commit_sha: z.string().nullable(),
   head: z.object({
     sha: z.string(),
     ref: z.string(),
@@ -138,6 +143,7 @@ export async function observeDeliveryPullRequest(
       baseRef: pr.base.ref,
       baseRepositoryFullName: pr.base.repo.full_name,
       mergeable: pr.mergeable,
+      mergeCommitSha: pr.merge_commit_sha,
     },
   };
 }

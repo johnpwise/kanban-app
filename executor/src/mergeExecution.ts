@@ -35,7 +35,18 @@ export type ExecuteEligibleDeliveryMergeOutcome =
       /** The new commit GitHub created for the merge — distinct from `deliveryCommitSha`. */
       mergeCommitSha: string;
     }
-  | { outcome: "already_merged"; executionRunId: string }
+  | {
+      outcome: "already_merged";
+      executionRunId: string;
+      repository: string;
+      pullRequestNumber: number;
+      /** The verified ADA delivery commit the already-merged PR was safely reconciled against —
+       * distinct from `mergeCommitSha`. */
+      deliveryCommitSha: string;
+      /** GitHub's merge commit identity, recovered from the live already-merged PR — never a
+       * second GitHub mutation. */
+      mergeCommitSha: string;
+    }
   | { outcome: "not_eligible"; executionRunId: string; eligibility: NotEligibleOutcome }
   | ({ outcome: "credential_unavailable"; executionRunId: string; repository: string; pullRequestNumber: number } & Omit<
       Extract<MergeFailure, { reason: "credential_unavailable" }>,
@@ -57,11 +68,15 @@ export type ExecuteEligibleDeliveryMergeOutcome =
  * the mutation.
  *
  * `evaluateMergeEligibility` is always re-run at the start of this call, never reused from an
- * earlier check. An ineligible result performs no GitHub mutation. `pull_request_already_merged` is
- * special-cased to a distinct `already_merged` outcome (live GitHub state is authoritative for
- * whether the PR is already merged) rather than a generic `not_eligible` failure — so a repeat
- * invocation after a prior successful merge is never reported as an ambiguous unexpected failure.
- * Every other ineligible reason is preserved verbatim under `eligibility`.
+ * earlier check. An ineligible result performs no GitHub mutation. A safely reconciled
+ * `pull_request_already_merged` result (live identity verified to agree with the durable delivery,
+ * carrying a recovered `mergeCommitSha`) is special-cased to a distinct `already_merged` outcome
+ * exposing that trusted identity — live GitHub state is authoritative for whether the PR is already
+ * merged — rather than a generic `not_eligible` failure, so a repeat invocation after a prior
+ * successful merge is never reported as an ambiguous unexpected failure, and a durable persistence
+ * step can safely record the recovered merge. Every other ineligible reason — including every
+ * already-merged *mismatch* reason, which never becomes a successful recovery — is preserved
+ * verbatim under `eligibility`.
  *
  * The small race window between the fresh eligibility check and the merge `PUT` is closed by
  * `mergeAdaPullRequest` itself: it always sends the eligible result's verified commit SHA as
@@ -78,8 +93,15 @@ export async function executeEligibleDeliveryMerge(
 
   if (!eligibility.eligible) {
     if (eligibility.reason === "pull_request_already_merged") {
-      logger?.info("Merge already completed: the pull request is already merged.", { executionRunId });
-      return { outcome: "already_merged", executionRunId };
+      const { repository, pullRequestNumber, deliveryCommitSha, mergeCommitSha } = eligibility;
+      logger?.info("Merge already completed: the pull request is already merged.", {
+        executionRunId,
+        repository,
+        pullRequestNumber,
+        deliveryCommitSha,
+        mergeCommitSha,
+      });
+      return { outcome: "already_merged", executionRunId, repository, pullRequestNumber, deliveryCommitSha, mergeCommitSha };
     }
     logger?.error("Merge refused: the delivery is not currently eligible.", { executionRunId, reason: eligibility.reason });
     return { outcome: "not_eligible", executionRunId, eligibility };

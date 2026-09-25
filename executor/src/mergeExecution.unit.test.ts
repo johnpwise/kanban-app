@@ -74,9 +74,17 @@ describe("executeEligibleDeliveryMerge", () => {
     expect(calls).toEqual([EXECUTION_RUN_ID]);
   });
 
-  it("should return a distinct already_merged outcome — not a generic not_eligible/failure — for the already-merged repeat-invocation path", async () => {
+  it("should return a distinct already_merged outcome carrying the reconciled trusted identity — not a generic not_eligible/failure, and no second GitHub mutation — for the already-merged repeat-invocation path", async () => {
     // Arrange
-    const alreadyMerged: MergeEligibilityOutcome = { eligible: false, reason: "pull_request_already_merged" };
+    const alreadyMerged: MergeEligibilityOutcome = {
+      eligible: false,
+      reason: "pull_request_already_merged",
+      executionRunId: EXECUTION_RUN_ID,
+      repository: REPOSITORY,
+      pullRequestNumber: PULL_REQUEST_NUMBER,
+      deliveryCommitSha: DELIVERY_COMMIT_SHA,
+      mergeCommitSha: MERGE_COMMIT_SHA,
+    };
     const { evaluateMergeEligibility } = fakeEvaluateMergeEligibility(alreadyMerged);
     const { mergeAdaPullRequest, calls } = fakeMergeAdaPullRequest({ ok: true, mergeCommitSha: MERGE_COMMIT_SHA });
 
@@ -84,7 +92,28 @@ describe("executeEligibleDeliveryMerge", () => {
     const result = await executeEligibleDeliveryMerge({ executionRunId: EXECUTION_RUN_ID, evaluateMergeEligibility, mergeAdaPullRequest });
 
     // Assert
-    expect(result).toEqual({ outcome: "already_merged", executionRunId: EXECUTION_RUN_ID });
+    expect(result).toEqual({
+      outcome: "already_merged",
+      executionRunId: EXECUTION_RUN_ID,
+      repository: REPOSITORY,
+      pullRequestNumber: PULL_REQUEST_NUMBER,
+      deliveryCommitSha: DELIVERY_COMMIT_SHA,
+      mergeCommitSha: MERGE_COMMIT_SHA,
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("should pass through an already-merged mismatch reason as an ordinary not_eligible failure, never a successful recovery", async () => {
+    // Arrange
+    const mismatched: MergeEligibilityOutcome = { eligible: false, reason: "pull_request_already_merged_head_sha_mismatch" };
+    const { evaluateMergeEligibility } = fakeEvaluateMergeEligibility(mismatched);
+    const { mergeAdaPullRequest, calls } = fakeMergeAdaPullRequest({ ok: true, mergeCommitSha: MERGE_COMMIT_SHA });
+
+    // Act
+    const result = await executeEligibleDeliveryMerge({ executionRunId: EXECUTION_RUN_ID, evaluateMergeEligibility, mergeAdaPullRequest });
+
+    // Assert
+    expect(result).toEqual({ outcome: "not_eligible", executionRunId: EXECUTION_RUN_ID, eligibility: mismatched });
     expect(calls).toHaveLength(0);
   });
 

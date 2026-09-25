@@ -3,8 +3,10 @@ import type {
   ClaimExecutionRunOutcome,
   DeliveryIdentity,
   ExecutionRunRepository,
+  MergeResultIdentity,
   RecordCiResultOutcome,
   RecordDeliveryOutcome,
+  RecordMergeResultOutcome,
   RecordSourceRevisionOutcome,
 } from "../executionRunRepository";
 
@@ -32,6 +34,11 @@ export interface FakeRecordCiResultCall {
   result: CiResult;
 }
 
+export interface FakeRecordMergeResultCall {
+  executionRunId: string;
+  result: MergeResultIdentity;
+}
+
 export function createFakeExecutionRunRepository(behavior: {
   data?: unknown;
   throwError?: Error;
@@ -43,6 +50,8 @@ export function createFakeExecutionRunRepository(behavior: {
   recordDeliveryThrowError?: Error;
   recordCiResult?: RecordCiResultOutcome;
   recordCiResultThrowError?: Error;
+  recordMergeResult?: RecordMergeResultOutcome;
+  recordMergeResultThrowError?: Error;
 }): {
   repository: ExecutionRunRepository;
   calls: FakeExecutionRunRepositoryCall[];
@@ -50,18 +59,21 @@ export function createFakeExecutionRunRepository(behavior: {
   recordSourceRevisionCalls: FakeRecordSourceRevisionCall[];
   recordDeliveryCalls: FakeRecordDeliveryCall[];
   recordCiResultCalls: FakeRecordCiResultCall[];
+  recordMergeResultCalls: FakeRecordMergeResultCall[];
 } {
   const calls: FakeExecutionRunRepositoryCall[] = [];
   const claimCalls: FakeClaimExecutionRunCall[] = [];
   const recordSourceRevisionCalls: FakeRecordSourceRevisionCall[] = [];
   const recordDeliveryCalls: FakeRecordDeliveryCall[] = [];
   const recordCiResultCalls: FakeRecordCiResultCall[] = [];
+  const recordMergeResultCalls: FakeRecordMergeResultCall[] = [];
   return {
     calls,
     claimCalls,
     recordSourceRevisionCalls,
     recordDeliveryCalls,
     recordCiResultCalls,
+    recordMergeResultCalls,
     repository: {
       async loadExecutionRunData(executionRunId: string) {
         calls.push({ executionRunId });
@@ -97,6 +109,13 @@ export function createFakeExecutionRunRepository(behavior: {
           throw behavior.recordCiResultThrowError;
         }
         return behavior.recordCiResult ?? { outcome: "created" };
+      },
+      async recordMergeResult(executionRunId: string, result: MergeResultIdentity) {
+        recordMergeResultCalls.push({ executionRunId, result });
+        if (behavior.recordMergeResultThrowError) {
+          throw behavior.recordMergeResultThrowError;
+        }
+        return behavior.recordMergeResult ?? { outcome: "created" };
       },
     },
   };
