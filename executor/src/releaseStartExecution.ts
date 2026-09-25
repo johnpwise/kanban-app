@@ -47,15 +47,27 @@ export type ExecuteEligibleReleaseStartOutcome =
       releaseIntentId: string;
       repository: string;
       version: string;
+      sourceBranch: string;
+      sourceRevision: string;
       releaseBranch: string;
       /** The verified local release-start commit that was pushed — distinct from `remoteSha` (independently re-resolved on GitHub). */
       commitSha: string;
       remoteSha: string;
     }
-  /** No `repository`/`version` here — `evaluateReleaseEligibility`'s own `already_started` reason
-   * carries only `releaseBranch`/`headSha`; this passes that exact shape through rather than
-   * inventing fields the eligibility contract doesn't provide. */
-  | { outcome: "already_started"; releaseIntentId: string; releaseBranch: string; headSha: string }
+  /** Passes through the exact trusted recovered identity `evaluateReleaseEligibility`'s own
+   * (strengthened) `already_started` reason carries — never inventing or independently re-deriving
+   * any field here. A durable persistence step can treat this identically to `started` for identity
+   * purposes (using `releaseCommitSha` in place of `commitSha`/`remoteSha`). */
+  | {
+      outcome: "already_started";
+      releaseIntentId: string;
+      repository: string;
+      version: string;
+      sourceBranch: string;
+      sourceRevision: string;
+      releaseBranch: string;
+      releaseCommitSha: string;
+    }
   | { outcome: "not_eligible"; releaseIntentId: string; eligibility: NotEligibleOutcome }
   | ({ outcome: "workspace_materialization_failed"; releaseIntentId: string; repository: string } & WorkspaceFailure)
   | {
@@ -96,6 +108,11 @@ export type ExecuteEligibleReleaseStartOutcome =
  * successfully pushed remote release branch is never deleted by cleanup, since cleanup only ever
  * touches the local ephemeral workspace.
  */
+/** A composition-bound closure over `executeEligibleReleaseStart` — every other param is bound once
+ * by the caller (a composition root), mirroring `ExecuteEligibleDeliveryMergeForRun`; only
+ * `releaseIntentId` is supplied per call. Used by `releaseStartCompletionController.ts`. */
+export type ExecuteEligibleReleaseStartForIntent = (releaseIntentId: string) => Promise<ExecuteEligibleReleaseStartOutcome>;
+
 export async function executeEligibleReleaseStart({
   releaseIntentId,
   evaluateReleaseEligibility,
@@ -109,12 +126,12 @@ export async function executeEligibleReleaseStart({
 
   if (!eligibility.eligible) {
     if (eligibility.reason === "already_started") {
-      const { releaseBranch, headSha } = eligibility;
+      const { repository, version, sourceBranch, sourceRevision, releaseBranch, releaseCommitSha } = eligibility;
       logger?.info("Release start already completed: the release branch already carries the requested version.", {
         releaseIntentId,
         releaseBranch,
       });
-      return { outcome: "already_started", releaseIntentId, releaseBranch, headSha };
+      return { outcome: "already_started", releaseIntentId, repository, version, sourceBranch, sourceRevision, releaseBranch, releaseCommitSha };
     }
     logger?.error("Release start refused: the release intent is not currently eligible.", { releaseIntentId, reason: eligibility.reason });
     return { outcome: "not_eligible", releaseIntentId, eligibility };
@@ -220,6 +237,8 @@ export async function executeEligibleReleaseStart({
       releaseIntentId,
       repository,
       version,
+      sourceBranch,
+      sourceRevision,
       releaseBranch,
       commitSha: commitOutcome.commitSha,
       remoteSha: pushOutcome.remoteSha,

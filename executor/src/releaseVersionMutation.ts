@@ -116,8 +116,12 @@ export type VerifyReleaseVersionOutcome =
   | { ok: false; reason: "lockfile_version_mismatch" }
   | { ok: false; reason: "lockfile_unrelated_change" };
 
-/** Order-independent structural equality for parsed JSON values (objects/arrays/primitives). */
-function deepEqualJson(a: unknown, b: unknown): boolean {
+/**
+ * Order-independent structural equality for parsed JSON values (objects/arrays/primitives).
+ * Exported for reuse by release-start recovery reconciliation (`releaseEligibility.ts`), which needs
+ * the identical "only the version field(s) changed" semantics against remotely-observed content.
+ */
+export function deepEqualJson(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (typeof a !== typeof b || a === null || b === null || typeof a !== "object") return false;
   if (Array.isArray(a) !== Array.isArray(b)) return false;

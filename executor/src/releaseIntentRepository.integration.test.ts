@@ -156,4 +156,163 @@ describeWithEmulator("createFirestoreReleaseIntentRepository() against the Fires
     const data = (await docRef.get()).data();
     expect(data?.sourceRevision).toBe(sourceRevision);
   });
+
+  describe("recordReleaseStartResult()", () => {
+    const releaseBranch = (version: string) => `release/${version}`;
+    const commitSha = "c".repeat(40);
+    const otherCommitSha = "d".repeat(40);
+
+    async function seedReleaseIntent(): Promise<{ releaseIntentId: string; version: string }> {
+      const version = uniqueVersion();
+      const releaseIntentId = `johnpwise__kanban-app--${version}`;
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseIntent(releaseIntentId, { repository: repositoryField, version, sourceBranch, sourceRevision });
+      return { releaseIntentId, version };
+    }
+
+    function trustedIdentity(version: string, overrides: Partial<{ releaseBranch: string; commitSha: string; sourceBranch: string; sourceRevision: string; version: string; repository: string }> = {}) {
+      return {
+        repository: repositoryField,
+        version,
+        sourceBranch,
+        sourceRevision,
+        releaseBranch: releaseBranch(version),
+        commitSha,
+        ...overrides,
+      };
+    }
+
+    it("records the first trusted release-start result against an existing release intent", async () => {
+      // Arrange
+      const { releaseIntentId, version } = await seedReleaseIntent();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseStartResult(releaseIntentId, trustedIdentity(version));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.start?.releaseBranch).toBe(releaseBranch(version));
+      expect(data?.start?.commitSha).toBe(commitSha);
+      expect(data?.start?.recordedAt).toBeInstanceOf(Timestamp);
+    });
+
+    it("idempotently accepts recording the exact same trusted identity that is already persisted", async () => {
+      // Arrange
+      const { releaseIntentId, version } = await seedReleaseIntent();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseStartResult(releaseIntentId, trustedIdentity(version));
+      const firstRecordedAt = (await docRef.get()).data()?.start?.recordedAt;
+
+      // Act
+      const outcome = await repository.recordReleaseStartResult(releaseIntentId, trustedIdentity(version));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "already_recorded" });
+      const data = (await docRef.get()).data();
+      expect(data?.start?.recordedAt).toEqual(firstRecordedAt);
+    });
+
+    it("refuses to overwrite an already-recorded result with a different release branch", async () => {
+      // Arrange
+      const { releaseIntentId, version } = await seedReleaseIntent();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseStartResult(releaseIntentId, trustedIdentity(version));
+
+      // Act
+      const outcome = await repository.recordReleaseStartResult(releaseIntentId, trustedIdentity(version, { releaseBranch: "release/other" }));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.start?.releaseBranch).toBe(releaseBranch(version));
+    });
+
+    it("refuses to overwrite an already-recorded result with a different commit SHA", async () => {
+      // Arrange
+      const { releaseIntentId, version } = await seedReleaseIntent();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseStartResult(releaseIntentId, trustedIdentity(version));
+
+      // Act
+      const outcome = await repository.recordReleaseStartResult(releaseIntentId, trustedIdentity(version, { commitSha: otherCommitSha }));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.start?.commitSha).toBe(commitSha);
+    });
+
+    it("fails closed with release_intent_not_found when no such release intent exists", async () => {
+      // Arrange
+      const repository = createFirestoreReleaseIntentRepository();
+      const missingId = `johnpwise__kanban-app--9.9.9-${randomUUID()}`;
+
+      // Act
+      const outcome = await repository.recordReleaseStartResult(missingId, trustedIdentity("9.9.9"));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_intent_not_found" });
+    });
+
+    it("fails closed with release_intent_invalid when the persisted document fails schema validation", async () => {
+      // Arrange
+      const version = uniqueVersion();
+      const releaseIntentId = `johnpwise__kanban-app--${version}`;
+      await firestore.collection("releaseIntents").doc(releaseIntentId).set({
+        releaseIntentId,
+        repository: repositoryField,
+        version: "v-not-a-version",
+        sourceBranch,
+        sourceRevision,
+        requestedAt: Timestamp.now(),
+      });
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseStartResult(releaseIntentId, trustedIdentity(version));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_intent_invalid" });
+    });
+
+    it("fails closed with release_intent_identity_mismatch when the supplied identity disagrees with the persisted immutable intent", async () => {
+      // Arrange
+      const { releaseIntentId, version } = await seedReleaseIntent();
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseStartResult(releaseIntentId, trustedIdentity(version, { sourceRevision: otherSourceRevision }));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_intent_identity_mismatch" });
+      const data = (await firestore.collection("releaseIntents").doc(releaseIntentId).get()).data();
+      expect(data?.start).toBeUndefined();
+    });
+
+    it("given many concurrent recordings of the same trusted identity, exactly one create is persisted and the rest converge idempotently", async () => {
+      // Arrange
+      const { releaseIntentId, version } = await seedReleaseIntent();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      const identity = trustedIdentity(version);
+      const attemptCount = 5;
+
+      // Act
+      const outcomes = await Promise.all(
+        Array.from({ length: attemptCount }, () => repository.recordReleaseStartResult(releaseIntentId, identity)),
+      );
+
+      // Assert
+      expect(outcomes.filter((outcome) => outcome.outcome === "created")).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome.outcome === "already_recorded")).toHaveLength(attemptCount - 1);
+      const data = (await docRef.get()).data();
+      expect(data?.start?.commitSha).toBe(commitSha);
+    });
+  });
 });

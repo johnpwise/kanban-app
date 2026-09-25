@@ -38,6 +38,17 @@ const commitShaSchema = z
   .trim()
   .regex(/^[0-9a-f]{40}$/i, "Expected a full 40-character commit SHA.");
 
+/**
+ * The durably-recorded result of a successfully completed (or safely reconciled) guarded
+ * release-start mutation — present only once `releaseIntentRepository.ts`'s
+ * `recordReleaseStartResult` has recorded one. Immutable once set.
+ */
+const releaseStartResultSchema = z.object({
+  releaseBranch: branchNameSchema,
+  commitSha: commitShaSchema,
+  recordedAt: z.instanceof(Timestamp),
+});
+
 /** Shape of a `releaseIntents/{releaseIntentId}` Firestore document's data. */
 export const releaseIntentDocumentSchema = z.object({
   releaseIntentId: z.string().min(1),
@@ -46,6 +57,7 @@ export const releaseIntentDocumentSchema = z.object({
   sourceBranch: branchNameSchema,
   sourceRevision: commitShaSchema,
   requestedAt: z.instanceof(Timestamp),
+  start: releaseStartResultSchema.optional(),
 });
 
 export type ReleaseIntentDocument = z.infer<typeof releaseIntentDocumentSchema>;

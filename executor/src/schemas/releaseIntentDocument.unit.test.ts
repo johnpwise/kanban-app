@@ -41,6 +41,24 @@ describe("parseReleaseIntentDocument", () => {
     expect(parsed).toEqual(validDocument);
   });
 
+  it("parses a valid document that also carries a durably recorded start result", () => {
+    const documentWithStart = {
+      ...validDocument,
+      start: { releaseBranch: "release/0.2.0", commitSha: "c".repeat(40), recordedAt: Timestamp.fromMillis(0) },
+    };
+    const parsed = parseReleaseIntentDocument(validDocument.releaseIntentId, documentWithStart);
+    expect(parsed).toEqual(documentWithStart);
+  });
+
+  it("throws on schema validation failure (malformed start.commitSha)", () => {
+    expect(() =>
+      parseReleaseIntentDocument(validDocument.releaseIntentId, {
+        ...validDocument,
+        start: { releaseBranch: "release/0.2.0", commitSha: "short", recordedAt: Timestamp.fromMillis(0) },
+      }),
+    ).toThrow();
+  });
+
   it("throws ReleaseIntentValidationError when the document id does not match releaseIntentId", () => {
     expect(() => parseReleaseIntentDocument("some-other-id", validDocument)).toThrow(ReleaseIntentValidationError);
   });
