@@ -204,6 +204,8 @@ see the Delegation Gate in [[reasoning-selection-policy]]. Raise the coordinatin
 
 `routine` / `inline` is the default assumption for bounded engineering and review work. Selecting
 `elevated` or `deep` requires explicit reasoning-difficulty evidence (several viable approaches, an
-unfamiliar area, high-consequence or subtle reasoning) recorded in the dispatch's `rationale`.
+unfamiliar area, high-consequence or subtle reasoning) recorded in the phase cache. Free-form
+`rationale` is emitted only for escalation, exception, acknowledged downgrade, or non-inline
+delegation.
 Selecting any `delegation` other than `inline` requires the Delegation Gate to be met and the
 justification recorded. The two decisions are made independently, per [[reasoning-selection-policy]].

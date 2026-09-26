@@ -19,8 +19,11 @@ This document defines the default end-to-end workflow for bug triage and fixes w
 
 ## Artifact persistence
 
+- Create and progressively populate `.agent-workflows/<workflow_id>/slice-spec.json` as the single
+  source for objective, acceptance criteria, scope, provenance, approvals, capability owners,
+  test matrix, increments, expected RED evidence, and verification.
 - Persist a compact **Step Record** per step under `.agent-workflows/<workflow_id>/` (delta-only —
-  link the report/plan, do not restate it), keep `.agent-workflows/<workflow_id>/index.md` current,
+  link the canonical slice spec by revision/hash, do not restate it), keep `.agent-workflows/<workflow_id>/index.md` current,
   and delete `.agent-workflows/<workflow_id>/` when closeout is complete.
 - Emit a Fresh Context Bootstrap line / completion block only for a cross-context dispatch or a
   reentry state.
@@ -31,6 +34,8 @@ This document defines the default end-to-end workflow for bug triage and fixes w
   reissue before starting.
 - Validate trigger format and normalize the report using
   `.github/agents/agents-core/agent-docs/templates/bug-report-template.md`.
+- Persist the normalized intake directly as `slice-spec.json`; inline planning enriches that same
+  record and validates its `planned` gate instead of creating a duplicate narrative plan.
 - Triggered intake is fail-closed until workflow bootstrap artifacts exist and the required RED
   (failing regression test) evidence exists.
 - Classify complexity (`trivial` or `non-trivial`) with rationale.
@@ -74,8 +79,9 @@ If any condition fails, do the full planning pass inline.
 4. Verify: required `e2e_status` must be `passing` before closeout. If a full-suite failure is
    outside the changed behaviour, classify it against the merge-base and record it — do not repair
    unrelated baseline failures in this fix.
-5. Apply the diff-classified review lenses (correctness always; others only when the diff touches
-   them). A blocking finding routes scoped rework inline, then the affected lenses re-run.
+5. Generate the conservative `review-lens-manifest.json` from the completed diff and canonical
+   slice spec, load only its `loadReferences`, then apply every included lens (correctness always).
+   A blocking finding routes scoped rework inline; regenerate the manifest and rerun affected lenses.
 6. Commit + push via the `commit-and-push` skill.
 7. Re-enter the workflow-owner role for blocker / approval / closeout events.
 8. PR authoring runs only on a separate, explicit PR request; never automatic, never a closeout
@@ -91,10 +97,10 @@ If any condition fails, do the full planning pass inline.
 - `capability_owners` with stack-defined required keys must be explicit for implementation slices.
 - for frontend slices that set `capability_owners.shared_client_state_owner`, `capability_owners.shared_client_state_tier` (`subtree` | `cross_feature`) must also be explicit.
 - Required `e2e_status` must be `passing` before closeout.
-- Review is **diff-classified**: exactly one lens is always-on — **correctness** (the stack code reviewer) — and every other lens (security/auth, API contracts, state ownership, persistence/transaction compatibility, accessibility, component composition, error/observability) runs only when the fix's diff actually touches its concern. Each stack pack's `bug-workflow-routing.md` owns the concrete trigger table.
+- Review is **diff-classified** through the deterministic conservative manifest: exactly one lens is always-on — **correctness** — and conditional lenses are included from the diff and slice spec. Uncertainty includes the lens; model judgment may add but never remove one; skips retain machine reason codes. Each stack pack owns the available lens inventory.
 - A review lens applied by the agent that produced the fix is `delegation: inline`; raise `delegation` only when the Delegation Gate is met.
-- The closeout step record lists which lenses ran and a one-line reason for each lens skipped.
-- The always-on correctness lens plus every diff-triggered lens must be complete with no blocking findings before closeout.
+- The closeout step record links the manifest path/hash, lists which lenses ran, and retains each skipped lens's machine reason code.
+- The always-on correctness lens plus every manifest-included lens must be complete with no blocking findings before closeout.
 - Commit authoring must run only after the applicable reviewer gates pass with no blocking findings.
 - Commit-and-push success (commit SHA(s) plus push evidence) is sufficient for `ready-for-closeout`; PR authoring is never required for closeout.
 - PR authoring must run only on an explicit, separate PR request, and only after commit authoring is complete and commit SHAs are recorded; it must never be dispatched automatically after commit-and-push.

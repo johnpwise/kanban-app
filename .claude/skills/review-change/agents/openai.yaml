@@ -3,4 +3,4 @@ version: 1
 interface:
   display_name: Review Change
   short_description: Review a completed diff through diff-classified lenses — correctness always, plus accessibility, composition, state ownership, contracts, persistence, error/observability, and route boundary when the diff touches them.
-  default_prompt: Classify this diff, run the correctness lens plus every conditional lens the diff touches, and return findings split into blocking (changes-required) and follow-up, recording which lenses ran and why each skipped one was skipped.
+  default_prompt: Generate or validate the conservative review-lens manifest from the completed diff and slice spec, load only its selected references, run every included lens, and return blocking findings and follow-up with the manifest hash and skip reason codes.

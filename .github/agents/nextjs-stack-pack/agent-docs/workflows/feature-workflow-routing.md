@@ -10,9 +10,9 @@ Inherit baseline ownership, routing metadata semantics, artifact persistence/ind
 
 ## Stack-specific review gates (diff-classified)
 
-Classify the diff and run only the lenses it actually touches, applied inline via
-`skills/review-change/` (`references/`). Every lens is `delegation: inline` unless the Delegation
-Gate is separately met, in which case the review is delegated to `Independent-Reviewer`.
+Generate `review-lens-manifest.json` from the completed diff and canonical slice spec, then load
+only its `loadReferences` and apply those lenses inline via `skills/review-change/`. Every lens is
+`delegation: inline` unless the Delegation Gate is separately met.
 
 | Lens (`skills/review-change/references/`) | When it runs |
 | --- | --- |
@@ -27,12 +27,12 @@ Gate is separately met, in which case the review is delegated to `Independent-Re
 
 Contract modelling happens at plan time (`skills/feature-planning/`); the api-contracts lens then reviews the change in the diff.
 
-The classification and the set of lenses run (with a one-line reason for each skip) is recorded in
-the closeout step record.
+The closeout step record links the manifest path/hash and retains each skipped lens's machine
+reason code. Uncertain classification includes the lens; model judgment may add but never remove.
 
 ## Required gate reminder
 
-- The correctness lens plus every diff-triggered lens above must be complete with no blocking findings before PR-ready closeout.
+- The correctness lens plus every manifest-included lens above must be complete with no blocking findings before PR-ready closeout.
 - Commit authoring must run only after the applicable review lenses pass with no blocking findings.
 - Commit authoring is complete only after push succeeds and push evidence is recorded.
 - `ready-for-closeout` is valid once commit authoring completes with commit SHA(s) and push-success evidence; PR authoring is never required for closeout.

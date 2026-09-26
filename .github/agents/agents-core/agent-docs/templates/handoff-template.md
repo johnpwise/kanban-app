@@ -13,13 +13,19 @@ There are two shapes. Use the smallest one that fits.
    agent context** (`delegation: advisor` / `independent` / `parallel`, or a fresh resume window).
    Carries enough for a cold context to pick the work up.
 
+During Slice 1 shadow mode, persist these Markdown shapes unchanged and append their structured
+equivalent to `ledger.jsonl` using `agent-docs/workflows/workflow-ledger.md`. New Slice 2 workflows
+also carry the canonical `slice-spec.json` path/revision/hash. The ledger-derived handoff proves
+atomic dispatch with its event ID + hash and does not add an acknowledgement event.
+
 ## The delta-only invariant (both shapes)
 
-**Do not restate information that is already available through a stable referenced source.** The
-original request, acceptance criteria, plan, and test matrix live in their source documents — link
-to them by path (and heading anchor where useful), do not copy them. Record only: what changed,
-what was decided, the evidence, blockers, and the next action. A record that reproduces its inputs
-is wrong even if every fact in it is correct.
+**Do not restate information that is already available through a stable referenced source.** For a
+new workflow, objective, acceptance criteria, scope, provenance, approvals, capability owners,
+test matrix, increments, expected RED evidence, and verification all live in
+`.agent-workflows/<workflow_id>/slice-spec.json`. Link that path plus revision/hash; do not copy its
+fields. Record only what changed, evidence, blockers, and the next action. Legacy workflows may
+link their existing request/plan. A record that reproduces its inputs is wrong even when correct.
 
 ## Artifact budgets
 
@@ -47,12 +53,12 @@ plan, not in the artifact.
 
 ```
 Workflow: <workflow_id>
-Source of truth: <path-to-request-or-plan>[#heading]
+Source of truth: .agent-workflows/<workflow_id>/slice-spec.json (revision <n>, hash <sha256>)
 Step: <what just happened> → next: <what happens next>
 Status: in-progress | blocked | awaiting-approval | ready-for-closeout
 
-Execution Profile Metadata: <execution_profile> | reasoning_demand=<...> | delegation=<...>
-  (risk/scope/reversibility/verification and rationale in one line; escalated_from/escalation_reason if any)
+Execution Profile ID: <ep-12-hex> (resolved in execution-profile-cache.json)
+  (add rationale only for escalation, exception, acknowledged downgrade, or non-inline delegation)
 
 TDD state: red | green | refactor | n/a
   last command: <command>
@@ -65,12 +71,15 @@ Next action: <one line; and next_agent_alias / workflow_status / reentry_reason 
 ```
 
 Notes:
-- No acknowledgement ritual, no dual absolute+relative paths, no re-pasted acceptance criteria or
-  `test_layer_matrix` — those are read from the source of truth.
-- `Execution Profile Metadata` stays one block; see
+- No acknowledgement ritual, no dual absolute+relative paths, no re-pasted slice-spec fields —
+  those are read from the canonical source of truth.
+- `Execution Profile ID` is the normal-path form of the Execution Profile Metadata contract; see
   `agent-docs/routing/execution-profile-schema.md` for field meanings. The marker string
-  "Execution Profile Metadata" must be present.
+  "Execution Profile Metadata" remains in cross-context expanded blocks and legacy records.
 - A Step Record is also the checkpoint shape — see `checkpoint-template.md`.
+- Its shadow event must preserve the exact command + integer exit result, SHAs, changed areas,
+  decisions, risks, blockers, approvals, and any free-form exception that cannot be represented
+  more narrowly.
 
 ---
 
@@ -85,7 +94,7 @@ never a path form.
 
 - **From / To Agent:**
 - **Task Type:** (feature | bug | refactor | review | research)
-- **Workflow ID:** and **Source of truth:** (path[#heading] — not a copy)
+- **Workflow ID:** and **Source of truth:** (`slice-spec.json` path + revision + hash — not a copy)
 - **Completion Status:** (`ready-for-next-agent` | `needs-changes` | `approval-required` | `blocked`)
 
 ### Execution Profile Metadata (Required)
@@ -100,6 +109,10 @@ Per `agent-docs/routing/execution-profile-schema.md`:
 - **Rationale:** (one line covering the reasoning-demand and delegation choice)
 - **Escalated From / Escalation Reason:** (only if escalated)
 
+Router-managed handoffs also include **Execution Profile ID** and expand the fields above from
+`execution-profile-cache.json`. Do not repeat `Rationale` for a routine inline selection;
+cross-context delegation always has a rationale because it crossed the Delegation Gate.
+
 `Reasoning Demand` and `Delegation` are independent — any pairing is valid. `Delegation: parallel`
 names two or more independent workstreams in `Rationale`; an `orchestration-*` profile requires
 `Delegation: parallel`. The subagent acknowledges `Active Agent` + `Execution Profile` +
@@ -109,10 +122,10 @@ names two or more independent workstreams in `Rationale`; an `orchestration-*` p
 
 - **In scope now / deferred:**
 - **Files / areas likely involved:**
-- **Source-of-truth pointers:** acceptance criteria, plan, and `test_layer_matrix` **by path +
-  heading** — do not paste them
-- **Test evidence contract:** `capability_owners` keys in play, `required_preimplementation_tests`,
-  `preimplementation_failing_test_evidence`, `e2e_status` — current values only, one line each
+- **Canonical slice-spec pointer:** path + slice ID + revision + SHA-256 hash; read objective,
+  acceptance criteria, scope, approvals, owners, test matrix, increments, RED evidence, and
+  verification there — do not paste them
+- **Test evidence delta:** only evidence created after the referenced revision, if any
 - **Work completed / decisions / assumptions:** deltas only
 - **Evidence:** commands run and their results
 - **Risks / open questions / blockers:**

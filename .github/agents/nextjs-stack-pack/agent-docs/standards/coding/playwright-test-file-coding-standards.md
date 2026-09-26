@@ -3,10 +3,8 @@
 ## Purpose
 
 This document defines formatting and structure standards for Playwright test files in Next.js-based
-repos that inherit this stack pack. It replaces the `react-stack-pack`'s Cypress standard for this
-stack: Playwright is the browser/E2E testing framework here (see
-`agent-docs/standards/testing/frontend-testing-standards.md` for why). Cypress terminology below
-appears only where explicitly comparing to the retired approach.
+repos that inherit this stack pack. Playwright is the browser/E2E testing framework for this stack
+(see `agent-docs/standards/testing/frontend-testing-standards.md` for why).
 
 Repo overlays should keep only facts and exceptions.
 
@@ -44,6 +42,8 @@ Canonical pattern:
 ```ts
 import { expect, test } from "@playwright/test";
 
+import { APP_SHELL_TEST_IDS } from "../src/app/appShell.testIds";
+
 test.describe("app shell", () => {
   test("should render app shell", async ({ page }) => {
     // Arrange
@@ -52,7 +52,7 @@ test.describe("app shell", () => {
     await page.goto("/");
 
     // Assert
-    await expect(page.getByTestId("app-shell")).toBeVisible();
+    await expect(page.getByTestId(APP_SHELL_TEST_IDS.shell)).toBeVisible();
   });
 });
 ```
@@ -84,9 +84,9 @@ use: {
 },
 ```
 
-With this set, `page.getByTestId("app-shell")` resolves `[data-id="app-shell"]`. Bind selectors from
-the same colocated `*_TEST_IDS` constants the component/component-test layer uses — never hard-code a
-`data-id` string in a spec file.
+With this set, `page.getByTestId(APP_SHELL_TEST_IDS.shell)` resolves the app-owned `data-id` value.
+Bind selectors from the same colocated `*_TEST_IDS` constants the component/component-test layer uses
+— never hard-code a `data-id` string in a spec file.
 
 ## Waiting and assertion discipline
 

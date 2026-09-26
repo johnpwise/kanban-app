@@ -9,6 +9,9 @@ Each stack pack's own `<stack>-bug-intake.prompt.md` (frontend) or `api-bug-inta
 - If the trigger is missing, do not dispatch a bug workflow; request a correctly triggered reissue first.
 - Before creating workflow artifacts or editing tests/production code, complete the mandatory work-branch preflight: require a clean tree, fetch and `git pull --ff-only origin develop`, derive a Git-safe kebab-case slug from the normalized summary, reject local/remote collisions, and create `bugfix/<slug>` from synchronized `develop`. Stop on any failure; never merge, rebase, reset, discard work, reuse/auto-suffix a branch, or push an empty branch.
 - After trigger validation, normalize the report into explicit behavior, repro, and validation expectations, then plan and deliver the fix in a single primary context (repro → RED → GREEN → REFACTOR → verify → review lenses → commit). Delegate to a separate agent context only when the Delegation Gate is met.
+- Persist normalized intake and planning in `.agent-workflows/<workflow_id>/slice-spec.json` per
+  `agent-docs/workflows/canonical-slice-spec.md`; later output references path/revision/hash and
+  never repeats canonical fields.
 - Under workflow triggers, use fail-closed behavior: no implementation edits before workflow artifacts are bootstrapped and the required RED evidence exists.
 
 ## Reusable trigger template
@@ -26,7 +29,7 @@ Do all of this inline in the primary context unless the Delegation Gate is met
 
 - planning — complexity classification and increment sequencing
 - test strategy — `test_layer_matrix` and pre-implementation failing-test design
-- review lenses, diff-classified (see `agent-docs/workflows/bug-workflow-routing.md`): correctness always; every other lens only when the diff touches it
+- review lenses, conservative manifest-classified (see `agent-docs/workflows/bug-workflow-routing.md`): correctness always; uncertainty includes; model additions only
 - commit + push via the `commit-and-push` skill once the applicable lenses pass
 
 Use a separate agent context only for an isolated review of an authorization / shared-state /
@@ -66,7 +69,8 @@ Intake policy also includes: for new/updated frontend slices, when
 
 ### Intake output shape
 
-Return:
+Populate these canonical slice-spec fields, then return only the path/revision/hash plus unresolved
+questions:
 
 - bug summary
 - actual behavior
@@ -110,7 +114,8 @@ Return:
 
 ### Intake output shape
 
-Return:
+Populate these canonical slice-spec fields, then return only the path/revision/hash plus unresolved
+questions:
 
 - bug summary
 - actual behavior

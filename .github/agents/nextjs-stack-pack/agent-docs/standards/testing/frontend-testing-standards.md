@@ -86,8 +86,9 @@ Usually prefer:
 - do not hard-code `data-id` selector values in JSX for asserted targets
 - configure Testing Library with `testIdAttribute: "data-id"` before using `getByTestId` queries
 - query asserted targets by configured `data-id` in component/integration tests (example: `screen.getByTestId(APP_SHELL_TEST_IDS.shell)`)
-- configure Playwright with `testIdAttribute: "data-id"` and use `page.getByTestId("app-shell")` for
-  asserted targets in `e2e`; prefer role/accessible-name locators first where they are stable (see
+- configure Playwright with `testIdAttribute: "data-id"` and use app-owned constants with
+  `page.getByTestId(APP_SHELL_TEST_IDS.shell)` for asserted targets in `e2e`; prefer
+  role/accessible-name locators first where they are stable (see
   `agent-docs/standards/coding/playwright-test-file-coding-standards.md`)
 
 ### Common omissions to catch

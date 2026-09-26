@@ -29,12 +29,15 @@ Unless a stack or repo overlay says otherwise, agents should assume:
 - every valid `New Feature` or `Bug Fix` intake must complete the mandatory work-branch preflight before any workflow artifact, test, or production-file write: synchronize local `develop` with `origin/develop` using `git pull --ff-only origin develop`, then create a new `feature/<derived-kebab-case-slug>` or `bugfix/<derived-kebab-case-slug>` branch from it
 - the work-branch preflight is fail-closed: require a clean tree, a reachable `origin/develop`, a usable slug derived from the normalized request, and no local or remote branch-name collision; never merge, rebase, reset, discard work, reuse a colliding branch, auto-suffix it, or push an empty branch
 - when a stack overlay defines explicit intake triggers, triggered requests should run in fail-closed mode until required workflow artifacts are persisted by the workflow owner
+- every new feature or bug workflow has one canonical `.agent-workflows/<workflow_id>/slice-spec.json`; intake creates it, planning/RED/verification progressively populate it, and other workflow state references its path/revision/hash instead of restating objective, criteria, scope, provenance, approvals, owners, matrix, increments, expected RED evidence, or verification
+- canonical slice-spec provenance entries and approval decisions are append-only; identity, approval boundaries, revisions, and workflow status must not regress; legacy workflows without a slice spec remain readable but new workflows may not use that omission
 - in fail-closed mode, no implementation edits are allowed before required workflow artifacts exist
 - in fail-closed mode, the first response should report workflow ownership and routing state, not direct implementation
 - in fail-closed mode, if trigger format or required routing metadata is incomplete, request a correctly formatted reissue before code changes
 - bug requests are classified `trivial` / `non-trivial` during inline `skills/feature-planning/` before implementation
 - a trivial fast-path skips planning ceremony only when boundaries are clear, and must still enforce test-first/evidence/review gates
 - every workflow record uses `agent-docs/templates/handoff-template.md`: a compact **Step Record** for same-context steps, a full **Cross-Context Handoff Package** only when a step is dispatched to a separate agent context or a fresh resume window
+- Slice 1 ledger shadow mode is additive: after persisting each existing Markdown workflow artifact, append the equivalent structured event to `.agent-workflows/<workflow_id>/ledger.jsonl` with `scripts/workflow-ledger.mjs`; derive `ledger-views/` from that ledger and record discrepancies without deleting or weakening the compatibility artifact
 - default routing returns to `delivery-engineer.agent.md` unless a cross-context handoff explicitly overrides `Return To Agent`
 - a copy/paste-ready completion/bootstrap block (with artifact path and continue-workflow line) is emitted only for a cross-context dispatch or a workflow-owner reentry state; in-context steps just continue
 - worker routing metadata (`next_agent_alias`, `workflow_status`, `reentry_reason`) controls happy-path chaining; `delivery-engineer` enforces required gate order on reentry
@@ -61,9 +64,10 @@ Unless a stack or repo overlay says otherwise, agents should assume:
 - stack packs should define required `capability_owners` keys for their domain
 - frontend stacks using `capability_owners.shared_client_state_owner` should require `capability_owners.shared_client_state_tier` (`subtree` | `cross_feature`) for new/updated frontend slices
 - repo-local overlays should map stack-defined capabilities and test layers to concrete packages and tooling for that repository
-- review is diff-classified: one always-on correctness lens plus only the lenses the diff actually touches (each stack pack's `feature-workflow-routing.md` / `bug-workflow-routing.md` owns the trigger table); the closeout step record lists which lenses ran and why each skipped one was skipped; blocking findings trigger scoped rework loops
+- review is diff-classified through `.agent-workflows/<workflow_id>/review-lens-manifest.json`: one always-on correctness lens plus only the lenses the completed diff and canonical slice spec trigger (each stack pack owns its lens inventory); uncertain classification includes the lens, the model may add but never remove lenses, skipped lenses carry machine reason codes, and only `loadReferences` are loaded; the closeout step record links the manifest and blocking findings trigger scoped rework loops
 - a review lens is `delegation: inline` by default; raise `delegation` only when the Delegation Gate is met
 - every dispatch and handoff must carry Execution Profile Metadata (`execution_profile`, `capability`, `reasoning_demand`, `delegation`, `risk`, `scope`, `reversibility`, `verification`, `rationale`) per `agent-docs/routing/execution-profile-schema.md`; `reasoning_demand` is one of four levels — `lightweight`, `routine`, `elevated`, `deep` — `delegation` is one of `inline`, `advisor`, `independent`, `parallel`, and profiles are selected per-dispatch and may vary across a workflow
+- resolve that semantic metadata once at each phase boundary with `scripts/execution-profile-router.mjs`; persist the compact profile ID in normal-path records, reuse the cache until new risk evidence appears, and emit free-form rationale only for escalation, exception, acknowledged downgrade, or non-inline delegation
 - `reasoning_demand` and `delegation` are independent decisions: `reasoning_demand` is how hard the thinking is, `delegation` is whether a separate agent context does it. Difficulty, file count, and module count never by themselves raise `delegation` — see the Delegation Gate in `agent-docs/routing/reasoning-selection-policy.md`
 - `reasoning_demand` is advisory model/effort at every level and never by itself forces a separate context; `delegation: inline` (the default) runs in the primary context, and `advisor`/`independent`/`parallel` are dispatched through the `Agent` tool with each subagent's model set from its own `reasoning_demand`, per the Realization Rule in `agent-docs/routing/reasoning-selection-policy.md`
 - a specialist may escalate its own dispatch's `reasoning_demand` or propose raising `delegation` with recorded `escalated_from`/`escalation_reason`, but must never silently downgrade an assigned `reasoning_demand` or `delegation` without explicit recorded rationale and re-acknowledgement
@@ -112,9 +116,9 @@ Default flow:
 2. Per increment: RED (write the failing test for the intended behaviour) → GREEN (make it pass plus
    the regression surface) → REFACTOR (no behaviour change) → targeted verify.
 3. Feature-level verification (broader integration / E2E) at the checkpoint.
-4. Apply `skills/review-change/` — the diff-classified review lenses (correctness always; others
-   only when the diff touches them); delegate to `independent-reviewer` only when the Delegation
-   Gate is met.
+4. Generate the conservative review-lens manifest, load only its selected references, and apply
+   `skills/review-change/` (correctness always; uncertainty includes; model additions only);
+   delegate to `independent-reviewer` only when the Delegation Gate is met.
 5. Commit + push via the `commit-and-push` skill.
 6. `delivery-engineer` re-enters only for blockers, approvals, or closeout.
 
@@ -146,13 +150,12 @@ Return to `delivery-engineer` when handoff routing metadata indicates `blocked`,
 
 ## 6. Handoff and checkpoint expectations
 
-Every record obeys the **delta-only invariant** (`agent-docs/templates/handoff-template.md`): link
-the request, acceptance criteria, plan, and `test_layer_matrix` by path; record only deltas,
-decisions, evidence, and next state. A record that reproduces its inputs is wrong even when every
-fact in it is correct.
+Every record obeys the **delta-only invariant** (`agent-docs/templates/handoff-template.md`): for a
+new workflow, link the canonical `slice-spec.json` by path/revision/hash; record only deltas,
+evidence, and next state. Legacy workflows may link their existing request/plan. A record that
+reproduces canonical fields is wrong even when every fact in it is correct.
 
-- **Same-context step** → a compact **Step Record**: status, one-line Execution Profile Metadata
-  (`execution_profile` | `reasoning_demand` | `delegation` | rationale), TDD state + last
+- **Same-context step** → a compact **Step Record**: status, cached Execution Profile ID, TDD state + last
   command/result, changed areas, new decisions, blockers, next action.
 - **Cross-context dispatch** (`delegation: advisor` / `independent` / `parallel`, or a fresh resume
   window) → a **Cross-Context Handoff Package**: line 1 `Use agent spec: <alias>`, the full
@@ -164,6 +167,19 @@ A completion / bootstrap block (target alias, artifact path, `Execution Profile`
 Demand` / `Delegation`, continue-workflow line) is emitted **only** for a cross-context dispatch or
 a workflow-owner reentry (`blocked`, `awaiting-approval`, `ready-for-closeout`). In-context steps
 just continue.
+
+During Slice 1 shadow mode, every Markdown record above also produces one hash-chained event using
+`agent-docs/workflows/workflow-ledger.md`. The event preserves commands and integer exit results,
+SHAs, changed areas, decisions, risks, blockers, approvals, and free-form exceptions;
+`ledger-views/` is always derived
+and may be rebuilt. A ledger `dispatch-created` event is self-validating by event ID + hash and its
+simulation path requires no acknowledgement round-trip. Existing Markdown artifacts remain beside
+it until equivalence is proven and an explicit cutover is approved.
+
+For a new Slice 2 workflow, every ledger event additionally retains the current canonical
+slice-spec path, slice ID, revision, and content hash. Validate the spec at `planned`,
+**implementation-ready**, and `closeout` gates with `scripts/slice-spec.mjs`; do not copy its fields
+into ledger summaries or handoffs.
 
 Every artifact has a ceiling (Artifact budgets table in
 `agent-docs/templates/handoff-template.md`): initial plan 600–1,000 words; advisor result 500; TDD
@@ -179,11 +195,17 @@ Create checkpoints (a compact Step Record) when:
 
 Use these shared docs:
 - `agent-docs/workflows/handoff-workflow.md`
+- `agent-docs/workflows/workflow-ledger.md`
+- `agent-docs/workflows/canonical-slice-spec.md`
+- `agent-docs/workflows/review-lens-manifest.md`
 - `agent-docs/workflows/feature-workflow-routing.md`
 - `agent-docs/workflows/bug-workflow-routing.md`
 - `agent-docs/standards/architecture/frontend-state-ownership-standards.md`
 - `agent-docs/templates/handoff-template.md`
 - `agent-docs/templates/checkpoint-template.md`
+- `agent-docs/schemas/workflow-ledger-event.schema.json`
+- `agent-docs/schemas/slice-spec.schema.json`
+- `agent-docs/schemas/review-lens-manifest.schema.json`
 - `agent-docs/templates/feature-request-template.md`
 - `agent-docs/templates/bug-report-template.md`
 - `agent-docs/routing/execution-profile-schema.md`

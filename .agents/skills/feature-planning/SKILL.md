@@ -6,8 +6,10 @@ description: Turn a feature or bug request into a small, incremental delivery pl
 # Feature Planning
 
 Apply this skill **inline** as the plan step of a delivery slice — it is procedure the Delivery
-Engineer runs in the primary context, not a separate agent. It produces one persisted plan under
-the Artifact budgets ceiling (600–1,000 words) and a test strategy for each TDD increment.
+Engineer runs in the primary context, not a separate agent. For a new workflow it progressively
+populates `.agent-workflows/<workflow_id>/slice-spec.json` rather than creating a second narrative
+plan. Legacy workflows may retain their existing plan artifact. The canonical record carries the
+test strategy for each TDD increment and is validated at the `planned` stage.
 
 ## Vocabulary
 
@@ -33,19 +35,22 @@ Do not delegate planning. Delegate only when the Delegation Gate in
 - Test behaviour, not incidental implementation detail. Prefer high-signal coverage over raw test
   count — cover the changed surface and the most likely regressions.
 
-## Plan output
+## Canonical slice-spec output
 
-Produce, against the source of truth (link it — do not restate it):
+Populate the existing canonical slice spec using
+`agents-core/agent-docs/workflows/canonical-slice-spec.md`. Preserve intake fields and provenance;
+add a new provenance entry for inferred or repository-derived planning facts. Capture:
 
-- **Feature/bug summary** and desired user-visible behaviour.
+- **Objective** and desired user-visible behaviour (reference the existing intake value unless it
+  genuinely needs a newly proven correction).
 - **Complexity classification** — `trivial` or `non-trivial`, with a one-line rationale.
 - **In scope / out of scope.**
 - **Increment plan** — an ordered list of small, reviewable TDD increments. Each names the
   behaviour it adds and what "done" looks like.
 - **Risks, unknowns, sequencing constraints.**
-- **Approvals required** — anything that crosses an approval boundary (new dependency, new
-  architecture/boundary, new runtime assumption, contract change affecting other consumers,
-  material scope expansion).
+- **Approvals required** — append each boundary and its decisions; never replace or delete an
+  existing boundary or decision. Boundaries include a new dependency, architecture/boundary,
+  runtime assumption, contract change affecting consumers, or material scope expansion.
 - **`capability_owners`** per increment (stack-defined required keys; never package names). For a
   frontend increment using `shared_client_state_owner`, also `shared_client_state_tier`
   (`subtree` | `cross_feature`).
@@ -61,6 +66,9 @@ Produce, against the source of truth (link it — do not restate it):
   `additive` / `compatible-change` / `breaking-change`) per
   `skills/review-change/references/api-contracts.md`. A breaking change is an approval boundary.
 - **Validation checkpoints** — where to run which layers.
+
+Run `node scripts/slice-spec.mjs validate --spec <path> --stage planned` after population. Later
+records and handoffs reference its path/revision/hash instead of repeating this output.
 
 ## Test-strategy rules
 

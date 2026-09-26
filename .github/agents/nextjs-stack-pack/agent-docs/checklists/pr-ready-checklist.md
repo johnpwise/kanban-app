@@ -37,7 +37,7 @@ extensions and new sections below.
   Vitest component test
 
 ## Review hygiene — extends the baseline
-- the baseline "every diff-triggered lens ... is complete" item also includes the `nextjs-boundary`
+- the baseline "every manifest-included lens ... is complete" item also includes `nextjs-boundary`
   lens (accessibility, composition, state-ownership, contract, nextjs-boundary)
 
 ## Accessibility / UX — extends the baseline

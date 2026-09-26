@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "slice-spec.schema.json",
+  "title": "Canonical delivery slice specification",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sliceId",
+    "workflowId",
+    "kind",
+    "revision",
+    "status",
+    "createdAt",
+    "updatedAt",
+    "objective",
+    "acceptanceCriteria",
+    "scope",
+    "observations",
+    "provenance",
+    "approvals",
+    "capabilityOwners",
+    "testMatrix",
+    "increments",
+    "tests",
+    "expectedRedEvidence",
+    "verification",
+    "e2eStatus"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "sliceId": { "$ref": "#/$defs/nonEmptyString" },
+    "workflowId": { "$ref": "#/$defs/nonEmptyString" },
+    "kind": { "enum": ["feature", "bug"] },
+    "revision": { "type": "integer", "minimum": 1 },
+    "status": {
+      "enum": [
+        "intake",
+        "planned",
+        "red",
+        "implementation-ready",
+        "implementing",
+        "verifying",
+        "ready-for-closeout",
+        "closed"
+      ]
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "objective": { "$ref": "#/$defs/provenancedStatement" },
+    "complexity": {
+      "type": "object",
+      "required": ["classification", "rationale", "provenanceRef"],
+      "properties": {
+        "classification": { "enum": ["trivial", "non-trivial"] },
+        "rationale": { "$ref": "#/$defs/nonEmptyString" },
+        "provenanceRef": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/identifiedStatement" }
+    },
+    "scope": {
+      "type": "object",
+      "required": ["in", "out"],
+      "properties": {
+        "in": { "type": "array", "items": { "$ref": "#/$defs/identifiedStatement" } },
+        "out": { "type": "array", "items": { "$ref": "#/$defs/identifiedStatement" } }
+      },
+      "additionalProperties": false
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "statement", "provenanceRef"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonEmptyString" },
+          "category": { "$ref": "#/$defs/nonEmptyString" },
+          "statement": { "$ref": "#/$defs/nonEmptyString" },
+          "provenanceRef": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "sourceType", "source", "capturedAt", "capturedBy"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonEmptyString" },
+          "sourceType": { "enum": ["user", "inferred", "repository", "approval"] },
+          "source": { "$ref": "#/$defs/nonEmptyString" },
+          "capturedAt": { "type": "string", "format": "date-time" },
+          "capturedBy": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "approvals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "boundary", "requirement", "provenanceRef", "decisions"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonEmptyString" },
+          "boundary": { "$ref": "#/$defs/nonEmptyString" },
+          "requirement": { "$ref": "#/$defs/nonEmptyString" },
+          "provenanceRef": { "$ref": "#/$defs/nonEmptyString" },
+          "decisions": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/approvalDecision" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "capabilityOwners": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "owner", "rationale", "provenanceRef"],
+        "properties": {
+          "key": { "$ref": "#/$defs/nonEmptyString" },
+          "owner": { "$ref": "#/$defs/nonEmptyString" },
+          "rationale": { "$ref": "#/$defs/nonEmptyString" },
+          "provenanceRef": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "testMatrix": {
+      "type": "object",
+      "properties": {
+        "unit": { "$ref": "#/$defs/testLayer" },
+        "component": { "$ref": "#/$defs/testLayer" },
+        "integration": { "$ref": "#/$defs/testLayer" },
+        "e2e": { "$ref": "#/$defs/testLayer" }
+      },
+      "additionalProperties": false
+    },
+    "increments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "behavior", "doneWhen", "capabilityOwnerKeys", "testIds", "verificationIds", "status", "provenanceRef"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonEmptyString" },
+          "behavior": { "$ref": "#/$defs/nonEmptyString" },
+          "doneWhen": { "$ref": "#/$defs/nonEmptyString" },
+          "capabilityOwnerKeys": { "$ref": "#/$defs/stringList" },
+          "testIds": { "$ref": "#/$defs/stringList" },
+          "verificationIds": { "$ref": "#/$defs/stringList" },
+          "status": { "enum": ["planned", "in-progress", "complete"] },
+          "provenanceRef": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "layer", "description", "command", "preImplementation", "provenanceRef"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonEmptyString" },
+          "layer": { "$ref": "#/$defs/layer" },
+          "description": { "$ref": "#/$defs/nonEmptyString" },
+          "command": { "$ref": "#/$defs/nonEmptyString" },
+          "preImplementation": { "type": "boolean" },
+          "provenanceRef": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "expectedRedEvidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "testId", "expectedFailure", "status", "provenanceRef"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonEmptyString" },
+          "testId": { "$ref": "#/$defs/nonEmptyString" },
+          "expectedFailure": { "$ref": "#/$defs/nonEmptyString" },
+          "status": { "enum": ["planned", "captured"] },
+          "provenanceRef": { "$ref": "#/$defs/nonEmptyString" },
+          "command": { "$ref": "#/$defs/nonEmptyString" },
+          "exitCode": { "type": "integer", "not": { "const": 0 } },
+          "observedFailure": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "verification": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "layer", "requirement", "status", "provenanceRef"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonEmptyString" },
+          "layer": { "$ref": "#/$defs/layer" },
+          "requirement": { "$ref": "#/$defs/nonEmptyString" },
+          "status": { "enum": ["planned", "passing", "failing", "N/A"] },
+          "provenanceRef": { "$ref": "#/$defs/nonEmptyString" },
+          "command": { "$ref": "#/$defs/nonEmptyString" },
+          "exitCode": { "type": "integer" },
+          "result": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "e2eStatus": {
+      "type": "object",
+      "required": ["status", "provenanceRef"],
+      "properties": {
+        "status": { "enum": ["planned", "authored", "passing", "N/A"] },
+        "provenanceRef": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "stringList": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" } },
+    "layer": { "enum": ["unit", "component", "integration", "e2e"] },
+    "provenancedStatement": {
+      "type": "object",
+      "required": ["statement", "provenanceRef"],
+      "properties": {
+        "statement": { "$ref": "#/$defs/nonEmptyString" },
+        "provenanceRef": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "identifiedStatement": {
+      "type": "object",
+      "required": ["id", "statement", "provenanceRef"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "statement": { "$ref": "#/$defs/nonEmptyString" },
+        "provenanceRef": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "approvalDecision": {
+      "type": "object",
+      "required": ["id", "status", "rationale", "provenanceRef", "decidedBy", "decidedAt"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "status": { "enum": ["pending", "approved", "rejected", "deferred"] },
+        "rationale": { "$ref": "#/$defs/nonEmptyString" },
+        "provenanceRef": { "$ref": "#/$defs/nonEmptyString" },
+        "decidedBy": { "$ref": "#/$defs/nonEmptyString" },
+        "decidedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "testLayer": {
+      "type": "object",
+      "required": ["requirement", "rationale", "provenanceRef"],
+      "properties": {
+        "requirement": { "enum": ["required", "N/A"] },
+        "rationale": { "$ref": "#/$defs/nonEmptyString" },
+        "provenanceRef": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
