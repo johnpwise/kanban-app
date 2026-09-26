@@ -1,5 +1,7 @@
 name: CI
 
+run-name: "ADA-RELEASE-CI pr=${{ github.event.pull_request.number }} base=${{ github.event.pull_request.base.ref }} head=${{ github.event.pull_request.head.ref }} sha=${{ github.event.pull_request.head.sha }}"
+
 on:
   pull_request:
     branches:
