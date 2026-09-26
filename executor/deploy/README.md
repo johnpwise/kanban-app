@@ -31,7 +31,7 @@ the Job without a model. Setting a real value for `ADA_CODEX_MODEL` (and optiona
 
 ## What this is
 
-- `deploy.sh` — one script, five subcommands, each idempotent (safe to re-run):
+- `deploy.sh` — one script, eight subcommands, each idempotent (safe to re-run):
   - `setup` — enable required APIs, create the Artifact Registry repo and the runtime service
     account, bind IAM. One-time, but safe to re-run (every step checks-before-creating).
   - `build` — build the image (local Docker if present, otherwise Cloud Build) and push it to
@@ -100,6 +100,34 @@ the Job without a model. Setting a real value for `ADA_CODEX_MODEL` (and optiona
     Job, and granting the `ada-launcher-runtime` Function identity
     `roles/run.jobsExecutorWithOverrides` on it, are live GCP mutations gated behind explicit
     approval — not performed by writing this script.**
+  - `deploy-release-pr-controller-job` — create or update a **separate** Cloud Run Job
+    (`ada-release-pr-controller` by default, `ADA_RELEASE_PR_JOB_NAME`) that runs the same image as
+    `deploy-job`, overridden via `--command=node --args=lib/releasePullRequestControllerMain.js` to
+    run the release-pull-request-controller entry point instead of the image's default
+    `lib/main.js`. Unlike `deploy-release-controller-job`, this stage is automatically triggered by
+    a durable release-start completion, not explicitly invoked — it independently recovers the
+    trusted release intent, freshly reconciles the release branch/head, and creates/reuses + freshly
+    verifies both release Pull Requests (`main` and `develop`) (see
+    `executor/src/releasePullRequestControllerMain.ts`,
+    `executor/src/releasePullRequestEligibility.ts`, `executor/src/releasePullRequestExecution.ts`,
+    and `executor/src/releasePullRequestCompletionController.ts`); it never invokes Codex, so no
+    `CODEX_API_KEY` secret is wired. Reuses the same runtime service account and the same
+    `ADA_GITHUB_APP_PRIVATE_KEY` secret as `deploy-job`. Also sets this Job's own trusted
+    `ADA_RELEASE_REPOSITORY` as a plain (non-secret) env var — independent of the Functions
+    launcher's identically-named but separately-configured param
+    (`functions/src/adaReleaseControllerRunLauncherConfig.ts`); the two must agree, but neither is
+    derived from the other. Unlike `deploy-release-controller-job`, no `ADA_RELEASE_SOURCE_BRANCH` is
+    set: this stage never re-checks the source branch, only the already-durable release
+    branch/`start` result (`executor/src/releasePullRequestControllerConfig.ts`). Sets
+    `--task-timeout=600s`: a single guarded attempt with no bounded retry/poll loop, like
+    `deploy-release-controller-job`, but run twice — once per target (`main`, then `develop`) — each
+    involving a git-ref observation, a create/reuse call, and a verification observation. Like every
+    Job above, never sets `ADA_RELEASE_INTENT_ID` on the Job's persistent definition; it is supplied
+    per execution by the Functions launcher
+    (`functions/src/adaReleasePullRequestControllerJobLauncher.ts`). **Provisioning this Job, and
+    granting the `ada-launcher-runtime` Function identity `roles/run.jobsExecutorWithOverrides` on
+    it, are live GCP mutations gated behind explicit approval — not performed by writing this
+    script.**
   - `execute <executionRunId> <codexModel> [reasoningEffort]` — run the Job once, supplying
     `ADA_EXECUTION_RUN_ID`, `CODEX_MODEL`, and (if given) `CODEX_REASONING_EFFORT` as a
     per-execution override (`--update-env-vars` on `gcloud run jobs execute`). `codexModel` must be
@@ -134,7 +162,7 @@ A checked-in script matches the "smallest maintainable mechanism" bar; introduci
 four resources would be a disproportionate new toolchain. Revisit if/when ADA's infrastructure
 footprint grows enough to need drift detection or multi-environment state.
 
-## Resources this creates (on `setup` / `build` / `deploy-job` / `deploy-ci-controller-job` / `deploy-merge-controller-job` / `deploy-release-controller-job`)
+## Resources this creates (on `setup` / `build` / `deploy-job` / `deploy-ci-controller-job` / `deploy-merge-controller-job` / `deploy-release-controller-job` / `deploy-release-pr-controller-job`)
 
 | Resource | Name | Notes |
 | --- | --- | --- |
@@ -151,18 +179,21 @@ footprint grows enough to need drift detection or multi-environment state.
 | Cloud Run Job | `ada-ci-controller` (configurable via `ADA_CI_JOB_NAME`), created only by `deploy-ci-controller-job` | region `europe-west2`, 1 task, `max-retries=0`, `--task-timeout=1800s`, **same** runtime SA as `ada-executor` (no new SA), command overridden to `node lib/ciControllerMain.js`, only `ADA_GITHUB_APP_PRIVATE_KEY` sourced via `--set-secrets` (no `CODEX_API_KEY`), no persistent `ADA_EXECUTION_RUN_ID` |
 | Cloud Run Job | `ada-merge-controller` (configurable via `ADA_MERGE_JOB_NAME`), created only by `deploy-merge-controller-job` | region `europe-west2`, 1 task, `max-retries=0`, `--task-timeout=120s`, **same** runtime SA as `ada-executor` (no new SA), command overridden to `node lib/mergeControllerMain.js`, only `ADA_GITHUB_APP_PRIVATE_KEY` sourced via `--set-secrets` (no `CODEX_API_KEY`), no persistent `ADA_EXECUTION_RUN_ID` |
 | Cloud Run Job | `ada-release-controller` (configurable via `ADA_RELEASE_JOB_NAME`), created only by `deploy-release-controller-job` | region `europe-west2`, 1 task, `max-retries=0`, `--task-timeout=300s`, **same** runtime SA as `ada-executor` (no new SA), command overridden to `node lib/releaseControllerMain.js`, only `ADA_GITHUB_APP_PRIVATE_KEY` sourced via `--set-secrets` (no `CODEX_API_KEY`), plain `ADA_RELEASE_REPOSITORY`/`ADA_RELEASE_SOURCE_BRANCH` env vars, no persistent `ADA_RELEASE_INTENT_ID` |
+| Cloud Run Job | `ada-release-pr-controller` (configurable via `ADA_RELEASE_PR_JOB_NAME`), created only by `deploy-release-pr-controller-job` | region `europe-west2`, 1 task, `max-retries=0`, `--task-timeout=600s`, **same** runtime SA as `ada-executor` (no new SA), command overridden to `node lib/releasePullRequestControllerMain.js`, only `ADA_GITHUB_APP_PRIVATE_KEY` sourced via `--set-secrets` (no `CODEX_API_KEY`), plain `ADA_RELEASE_REPOSITORY` env var only (no `ADA_RELEASE_SOURCE_BRANCH`), no persistent `ADA_RELEASE_INTENT_ID` |
 
 Not yet created by this script, and gated behind a separate explicit approval: an IAM binding
 granting the `ada-launcher-runtime` Function identity `roles/run.jobsExecutorWithOverrides` on the
-`ada-ci-controller` Job specifically, the equivalent binding on the `ada-merge-controller` Job, and
-the equivalent binding on the `ada-release-controller` Job (Cloud Run Job IAM bindings are
-per-resource, so the existing binding on `ada-executor` does not cover any of them) — see
+`ada-ci-controller` Job specifically, the equivalent binding on the `ada-merge-controller` Job, the
+equivalent binding on the `ada-release-controller` Job, and the equivalent binding on the
+`ada-release-pr-controller` Job (Cloud Run Job IAM bindings are per-resource, so the existing
+binding on `ada-executor` does not cover any of them) — see
 `.agent-workflows/ci-controller-lifecycle-handoff/plan.md`'s approval boundaries for the
-CI-controller precedent; the merge-controller and release-controller bindings follow the identical
-pattern. Also not yet granted: the `launchAdaReleaseStart` Cloud Function's own `roles/run.invoker`
-binding on its underlying Cloud Run service (see "Firestore-trigger Cloud Functions need their own
-`run.invoker` binding" below — the same gap already recorded there for `launchAdaDeliveryCiControl`
-applies identically to this new trigger, and was not granted by writing this code).
+CI-controller precedent; the merge-controller, release-controller, and release-pr-controller
+bindings follow the identical pattern. Also not yet granted: the `launchAdaReleaseStart` and
+`launchAdaReleasePullRequestControl` Cloud Functions' own `roles/run.invoker` bindings on their
+underlying Cloud Run services (see "Firestore-trigger Cloud Functions need their own `run.invoker`
+binding" below — the same gap already recorded there for `launchAdaDeliveryCiControl` applies
+identically to both of these newer triggers, and was not granted by writing this code).
 
 No other roles are granted to the runtime service account. It cannot call other GCP APIs beyond
 Firestore, and has no Cloud Run/IAM/Artifact Registry permissions on itself. Cloud Build's own

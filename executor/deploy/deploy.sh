@@ -48,6 +48,18 @@
 #                               # named but separately-configured param. ADA_RELEASE_INTENT_ID is
 #                               # left unset here too — supplied per execution by the Functions
 #                               # launcher (functions/src/adaReleaseControllerJobLauncher.ts).
+#   deploy.sh deploy-release-pr-controller-job
+#                               # create or update the separate ada-release-pr-controller Cloud Run
+#                               # Job: same image as deploy-job, overridden to run
+#                               # `node lib/releasePullRequestControllerMain.js` instead of the
+#                               # image's default command. No CODEX_API_KEY secret is wired (this
+#                               # runtime never invokes Codex); the GitHub App private-key secret is
+#                               # reused. Also sets ADA_RELEASE_REPOSITORY as a plain (non-secret)
+#                               # env var — this Job's own trusted repository configuration,
+#                               # independent of the Functions launcher's identically-named but
+#                               # separately-configured param. ADA_RELEASE_INTENT_ID is left unset
+#                               # here too — supplied per execution by the Functions launcher
+#                               # (functions/src/adaReleasePullRequestControllerJobLauncher.ts).
 #   deploy.sh execute <runId> <codexModel> [reasoningEffort]
 #                               # run the Job once, overriding ADA_EXECUTION_RUN_ID, CODEX_MODEL, and
 #                               # (if given) CODEX_REASONING_EFFORT for that execution only — the
@@ -63,7 +75,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXECUTOR_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 usage() {
-  echo "Usage: $0 {setup|build|deploy-job|deploy-ci-controller-job|deploy-merge-controller-job|deploy-release-controller-job|execute <executionRunId> <codexModel> [reasoningEffort]}" >&2
+  echo "Usage: $0 {setup|build|deploy-job|deploy-ci-controller-job|deploy-merge-controller-job|deploy-release-controller-job|deploy-release-pr-controller-job|execute <executionRunId> <codexModel> [reasoningEffort]}" >&2
 }
 
 # The only Codex models/effort levels currently approved for ADA executor runs. Extend these
@@ -73,7 +85,7 @@ ALLOWED_CODEX_MODELS=("gpt-5.6-luna" "gpt-5.6-terra")
 ALLOWED_CODEX_REASONING_EFFORTS=("low" "medium" "high")
 
 case "${1:-}" in
-setup | build | deploy-job | deploy-ci-controller-job | deploy-merge-controller-job | deploy-release-controller-job | execute) ;;
+setup | build | deploy-job | deploy-ci-controller-job | deploy-merge-controller-job | deploy-release-controller-job | deploy-release-pr-controller-job | execute) ;;
 *)
   usage
   exit 1
@@ -95,6 +107,7 @@ fi
 : "${ADA_CI_JOB_NAME:?Set ADA_CI_JOB_NAME (see config.env.example)}"
 : "${ADA_MERGE_JOB_NAME:?Set ADA_MERGE_JOB_NAME (see config.env.example)}"
 : "${ADA_RELEASE_JOB_NAME:?Set ADA_RELEASE_JOB_NAME (see config.env.example)}"
+: "${ADA_RELEASE_PR_JOB_NAME:?Set ADA_RELEASE_PR_JOB_NAME (see config.env.example)}"
 : "${ADA_RELEASE_REPOSITORY:?Set ADA_RELEASE_REPOSITORY (see config.env.example)}"
 : "${ADA_RELEASE_SOURCE_BRANCH:?Set ADA_RELEASE_SOURCE_BRANCH (see config.env.example)}"
 : "${ADA_RUNTIME_SERVICE_ACCOUNT:?Set ADA_RUNTIME_SERVICE_ACCOUNT (see config.env.example)}"
@@ -109,6 +122,7 @@ JOB_NAME="$ADA_JOB_NAME"
 CI_JOB_NAME="$ADA_CI_JOB_NAME"
 MERGE_JOB_NAME="$ADA_MERGE_JOB_NAME"
 RELEASE_JOB_NAME="$ADA_RELEASE_JOB_NAME"
+RELEASE_PR_JOB_NAME="$ADA_RELEASE_PR_JOB_NAME"
 RELEASE_REPOSITORY="$ADA_RELEASE_REPOSITORY"
 RELEASE_SOURCE_BRANCH="$ADA_RELEASE_SOURCE_BRANCH"
 RUNTIME_SA="$ADA_RUNTIME_SERVICE_ACCOUNT"
@@ -477,6 +491,74 @@ cmd_deploy_release_controller_job() {
   echo "==> Job deployed."
 }
 
+cmd_deploy_release_pr_controller_job() {
+  require_cmd gcloud
+  local image
+  if [[ -f "$LAST_IMAGE_FILE" ]]; then
+    image="$(cat "$LAST_IMAGE_FILE")"
+  else
+    image="$(image_ref)"
+    echo "==> No recorded build from this session; assuming already-pushed image: $image"
+  fi
+
+  echo "==> Deploying (create-or-update) Cloud Run Job '$RELEASE_PR_JOB_NAME' in $REGION with image $image"
+  echo "    Same image as '$JOB_NAME', overridden to run 'node lib/releasePullRequestControllerMain.js'"
+  echo "    instead of the image's default command — this runtime never invokes Codex, so no"
+  echo "    CODEX_API_KEY secret is wired here. ADA_RELEASE_INTENT_ID is intentionally NOT set here"
+  echo "    — it is supplied per execution by the Functions launcher"
+  echo "    (functions/src/adaReleasePullRequestControllerJobLauncher.ts). ADA_RELEASE_REPOSITORY IS"
+  echo "    set here as a plain (non-secret) env var: this Job's own trusted repository"
+  echo "    configuration, read fresh on every execution by"
+  echo "    executor/src/releasePullRequestControllerConfig.ts — never caller-supplied, never"
+  echo "    derived from the Functions launcher's identically-named but independently-configured"
+  echo "    ADA_RELEASE_REPOSITORY param (functions/src/adaReleaseControllerRunLauncherConfig.ts)."
+  echo "    Unlike deploy-release-controller-job, no ADA_RELEASE_SOURCE_BRANCH is set: this stage"
+  echo "    never re-checks the source branch, only the already-durable release branch/start result"
+  echo "    (see executor/src/releasePullRequestControllerConfig.ts's own docstring)."
+  echo "    ADA_GITHUB_APP_PRIVATE_KEY is populated from Secret Manager at container start"
+  echo "    (--set-secrets), reusing the same secret as '$JOB_NAME' — so the real key value never"
+  echo "    appears in this script, in config.env, in the Job's own plain env-var config, or in"
+  echo "    Cloud Logging."
+  echo "    --task-timeout=600s: a single guarded attempt with no bounded retry/poll loop (like"
+  echo "    deploy-release-controller-job), but this stage runs that same guarded"
+  echo "    eligibility-check + create/reuse + fresh-verification sequence twice — once per target"
+  echo "    (main, then develop) — each involving a git-ref observation, a create/reuse call, and a"
+  echo "    verification observation. Sized generously above typical GitHub API round-trip time for"
+  echo "    six sequential API calls plus two Firestore transactional writes."
+
+  local deploy_args=(
+    "$RELEASE_PR_JOB_NAME"
+    --image="$image"
+    --command=node
+    --args=lib/releasePullRequestControllerMain.js
+    --region="$REGION"
+    --project="$PROJECT_ID"
+    --tasks=1
+    --max-retries=0
+    --task-timeout=600s
+    --service-account="$RUNTIME_SA"
+    --set-secrets="ADA_GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY_SECRET_NAME}:latest"
+  )
+
+  local release_pr_env_vars="ADA_RELEASE_REPOSITORY=${RELEASE_REPOSITORY}"
+
+  if [[ -n "$GITHUB_APP_ID" && -n "$GITHUB_APP_INSTALLATION_ID" ]]; then
+    echo "    ADA_GITHUB_APP_ID / ADA_GITHUB_APP_INSTALLATION_ID set from config (not secrets)."
+    release_pr_env_vars="${release_pr_env_vars},ADA_GITHUB_APP_ID=${GITHUB_APP_ID},ADA_GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID}"
+  else
+    echo "    ADA_GITHUB_APP_ID / ADA_GITHUB_APP_INSTALLATION_ID not set — the GitHub App has not"
+    echo "    been created/installed yet (see 'GitHub App delivery credential' in deploy/README.md)."
+    echo "    Deploying without them: fresh release-branch/PR observation will fail safely (typed"
+    echo "    'config_invalid' credential outcome) without blocking the rest of this deploy."
+  fi
+
+  deploy_args+=(--set-env-vars="$release_pr_env_vars")
+
+  gcloud run jobs deploy "${deploy_args[@]}"
+
+  echo "==> Job deployed."
+}
+
 contains_value() {
   local needle="$1"
   shift
@@ -527,5 +609,6 @@ deploy-job) cmd_deploy_job ;;
 deploy-ci-controller-job) cmd_deploy_ci_controller_job ;;
 deploy-merge-controller-job) cmd_deploy_merge_controller_job ;;
 deploy-release-controller-job) cmd_deploy_release_controller_job ;;
+deploy-release-pr-controller-job) cmd_deploy_release_pr_controller_job ;;
 execute) cmd_execute "${2:-}" "${3:-}" "${4:-}" ;;
 esac
