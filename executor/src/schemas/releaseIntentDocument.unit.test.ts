@@ -94,6 +94,97 @@ describe("parseReleaseIntentDocument", () => {
     ).toThrow();
   });
 
+  it("parses a valid document that also carries durably recorded terminal CI evidence for both targets", () => {
+    const documentWithCi = {
+      ...validDocument,
+      ci: {
+        main: {
+          number: 101,
+          baseBranch: "main",
+          headBranch: "release/0.2.0",
+          headSha: "c".repeat(40),
+          state: "succeeded",
+          runId: 501,
+          htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/501",
+          recordedAt: Timestamp.fromMillis(0),
+        },
+        develop: {
+          number: 102,
+          baseBranch: "develop",
+          headBranch: "release/0.2.0",
+          headSha: "c".repeat(40),
+          state: "failed",
+          runId: 502,
+          htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/502",
+          conclusion: "failure",
+          recordedAt: Timestamp.fromMillis(0),
+        },
+      },
+    };
+    const parsed = parseReleaseIntentDocument(validDocument.releaseIntentId, documentWithCi);
+    expect(parsed).toEqual(documentWithCi);
+  });
+
+  it("parses a valid document with only one target's terminal CI evidence recorded", () => {
+    const documentWithOneCiResult = {
+      ...validDocument,
+      ci: {
+        main: {
+          number: 101,
+          baseBranch: "main",
+          headBranch: "release/0.2.0",
+          headSha: "c".repeat(40),
+          state: "succeeded",
+          runId: 501,
+          htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/501",
+          recordedAt: Timestamp.fromMillis(0),
+        },
+      },
+    };
+    const parsed = parseReleaseIntentDocument(validDocument.releaseIntentId, documentWithOneCiResult);
+    expect(parsed).toEqual(documentWithOneCiResult);
+  });
+
+  it("throws on schema validation failure (ci.main.state not succeeded/failed)", () => {
+    expect(() =>
+      parseReleaseIntentDocument(validDocument.releaseIntentId, {
+        ...validDocument,
+        ci: {
+          main: {
+            number: 101,
+            baseBranch: "main",
+            headBranch: "release/0.2.0",
+            headSha: "c".repeat(40),
+            state: "pending",
+            runId: 501,
+            htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/501",
+            recordedAt: Timestamp.fromMillis(0),
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("throws on schema validation failure (malformed ci.main.headSha)", () => {
+    expect(() =>
+      parseReleaseIntentDocument(validDocument.releaseIntentId, {
+        ...validDocument,
+        ci: {
+          main: {
+            number: 101,
+            baseBranch: "main",
+            headBranch: "release/0.2.0",
+            headSha: "short",
+            state: "succeeded",
+            runId: 501,
+            htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/501",
+            recordedAt: Timestamp.fromMillis(0),
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
   it("throws ReleaseIntentValidationError when the document id does not match releaseIntentId", () => {
     expect(() => parseReleaseIntentDocument("some-other-id", validDocument)).toThrow(ReleaseIntentValidationError);
   });

@@ -539,4 +539,301 @@ describeWithEmulator("createFirestoreReleaseIntentRepository() against the Fires
       expect(data?.pullRequests?.main?.number).toBe(101);
     });
   });
+
+  describe("recordReleaseCiResult()", () => {
+    const releaseBranch = (version: string) => `release/${version}`;
+    const startCommitSha = "1".repeat(40);
+    const mainPrNumber = 201;
+    const developPrNumber = 202;
+
+    async function seedReleaseIntentWithPullRequests(): Promise<{ releaseIntentId: string; version: string }> {
+      const version = uniqueVersion();
+      const releaseIntentId = `johnpwise__kanban-app--${version}`;
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseIntent(releaseIntentId, { repository: repositoryField, version, sourceBranch, sourceRevision });
+      await repository.recordReleaseStartResult(releaseIntentId, {
+        repository: repositoryField,
+        version,
+        sourceBranch,
+        sourceRevision,
+        releaseBranch: releaseBranch(version),
+        commitSha: startCommitSha,
+      });
+      await repository.recordReleasePullRequestResult(releaseIntentId, {
+        repository: repositoryField,
+        version,
+        sourceBranch,
+        sourceRevision,
+        releaseBranch: releaseBranch(version),
+        commitSha: startCommitSha,
+        target: "main",
+        number: mainPrNumber,
+      });
+      await repository.recordReleasePullRequestResult(releaseIntentId, {
+        repository: repositoryField,
+        version,
+        sourceBranch,
+        sourceRevision,
+        releaseBranch: releaseBranch(version),
+        commitSha: startCommitSha,
+        target: "develop",
+        number: developPrNumber,
+      });
+      return { releaseIntentId, version };
+    }
+
+    function succeededCiIdentity(overrides: Partial<{ number: number; runId: number; htmlUrl: string }> = {}) {
+      return {
+        target: "main" as const,
+        number: mainPrNumber,
+        state: "succeeded" as const,
+        runId: 501,
+        htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/501",
+        ...overrides,
+      };
+    }
+
+    it("records the first trusted terminal CI result (succeeded) for a target against an already-recorded pull request", async () => {
+      // Arrange
+      const { releaseIntentId, version } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseCiResult(releaseIntentId, succeededCiIdentity());
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.main?.number).toBe(mainPrNumber);
+      expect(data?.ci?.main?.baseBranch).toBe("main");
+      expect(data?.ci?.main?.headBranch).toBe(releaseBranch(version));
+      expect(data?.ci?.main?.headSha).toBe(startCommitSha);
+      expect(data?.ci?.main?.state).toBe("succeeded");
+      expect(data?.ci?.main?.runId).toBe(501);
+      expect(data?.ci?.main?.htmlUrl).toBe("https://github.com/johnpwise/kanban-app/actions/runs/501");
+      expect(data?.ci?.main?.conclusion).toBeUndefined();
+      expect(data?.ci?.main?.recordedAt).toBeInstanceOf(Timestamp);
+      expect(data?.ci?.develop).toBeUndefined();
+    });
+
+    it("records a failed terminal CI result with its conclusion", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseCiResult(releaseIntentId, {
+        target: "develop",
+        number: developPrNumber,
+        state: "failed",
+        runId: 601,
+        htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/601",
+        conclusion: "failure",
+      });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.develop?.state).toBe("failed");
+      expect(data?.ci?.develop?.conclusion).toBe("failure");
+      expect(data?.ci?.main).toBeUndefined();
+    });
+
+    it("records the develop target independently of the main target", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseCiResult(releaseIntentId, succeededCiIdentity());
+
+      // Act
+      const outcome = await repository.recordReleaseCiResult(releaseIntentId, {
+        target: "develop",
+        number: developPrNumber,
+        state: "succeeded",
+        runId: 502,
+        htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/502",
+      });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.main?.runId).toBe(501);
+      expect(data?.ci?.develop?.runId).toBe(502);
+    });
+
+    it("idempotently accepts recording the exact same trusted CI result that is already persisted", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      const identity = succeededCiIdentity();
+      await repository.recordReleaseCiResult(releaseIntentId, identity);
+      const firstRecordedAt = (await docRef.get()).data()?.ci?.main?.recordedAt;
+
+      // Act
+      const outcome = await repository.recordReleaseCiResult(releaseIntentId, identity);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "already_recorded" });
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.main?.recordedAt).toEqual(firstRecordedAt);
+    });
+
+    it("refuses to overwrite an already-recorded CI result with a different runId (e.g. a GitHub Actions rerun)", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseCiResult(releaseIntentId, succeededCiIdentity());
+
+      // Act
+      const outcome = await repository.recordReleaseCiResult(releaseIntentId, succeededCiIdentity({ runId: 999 }));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.main?.runId).toBe(501);
+    });
+
+    it("refuses to overwrite an already-recorded succeeded result with a failed result for the same runId (rerun changed the outcome)", async () => {
+      // Arrange — same runId, different state: never treated as an idempotent replay.
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseCiResult(releaseIntentId, succeededCiIdentity({ runId: 700 }));
+
+      // Act
+      const outcome = await repository.recordReleaseCiResult(releaseIntentId, {
+        target: "main",
+        number: mainPrNumber,
+        state: "failed",
+        runId: 700,
+        htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/700",
+        conclusion: "failure",
+      });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.main?.state).toBe("succeeded");
+    });
+
+    it("fails closed with release_intent_not_found when no such release intent exists", async () => {
+      // Arrange
+      const repository = createFirestoreReleaseIntentRepository();
+      const missingId = `johnpwise__kanban-app--9.9.9-${randomUUID()}`;
+
+      // Act
+      const outcome = await repository.recordReleaseCiResult(missingId, succeededCiIdentity());
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_intent_not_found" });
+    });
+
+    it("fails closed with release_intent_invalid when the persisted document fails schema validation", async () => {
+      // Arrange
+      const version = uniqueVersion();
+      const releaseIntentId = `johnpwise__kanban-app--${version}`;
+      await firestore.collection("releaseIntents").doc(releaseIntentId).set({
+        releaseIntentId,
+        repository: repositoryField,
+        version: "v-not-a-version",
+        sourceBranch,
+        sourceRevision,
+        requestedAt: Timestamp.now(),
+      });
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseCiResult(releaseIntentId, succeededCiIdentity());
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_intent_invalid" });
+    });
+
+    it("fails closed with release_pull_request_missing when no pull request result is persisted yet for this target", async () => {
+      // Arrange
+      const version = uniqueVersion();
+      const releaseIntentId = `johnpwise__kanban-app--${version}`;
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseIntent(releaseIntentId, { repository: repositoryField, version, sourceBranch, sourceRevision });
+
+      // Act
+      const outcome = await repository.recordReleaseCiResult(releaseIntentId, succeededCiIdentity());
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_pull_request_missing" });
+    });
+
+    it("fails closed with release_pull_request_identity_mismatch when the persisted pull request number disagrees with the observed identity", async () => {
+      // Arrange — simulates a persisted PR result recorded under a different number than the one
+      // CI was actually observed against (e.g. stale caller state).
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseCiResult(releaseIntentId, succeededCiIdentity({ number: 999999 }));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_pull_request_identity_mismatch" });
+      const data = (await firestore.collection("releaseIntents").doc(releaseIntentId).get()).data();
+      expect(data?.ci).toBeUndefined();
+    });
+
+    it("never mutates the other target's already-recorded CI result", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseCiResult(releaseIntentId, succeededCiIdentity());
+      const mainRecordedAtBefore = (await docRef.get()).data()?.ci?.main?.recordedAt;
+
+      // Act — a conflicting attempt on develop must never touch main.
+      await repository.recordReleaseCiResult(releaseIntentId, {
+        target: "develop",
+        number: developPrNumber,
+        state: "succeeded",
+        runId: 800,
+        htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/800",
+      });
+      await repository.recordReleaseCiResult(releaseIntentId, {
+        target: "develop",
+        number: developPrNumber,
+        state: "failed",
+        runId: 999,
+        htmlUrl: "https://github.com/johnpwise/kanban-app/actions/runs/999",
+        conclusion: "failure",
+      });
+
+      // Assert
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.main?.recordedAt).toEqual(mainRecordedAtBefore);
+      expect(data?.ci?.main?.state).toBe("succeeded");
+      expect(data?.ci?.develop?.state).toBe("succeeded");
+      expect(data?.ci?.develop?.runId).toBe(800);
+    });
+
+    it("given many concurrent recordings of the same trusted CI result, exactly one create is persisted and the rest converge idempotently", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      const identity = succeededCiIdentity();
+      const attemptCount = 5;
+
+      // Act
+      const outcomes = await Promise.all(
+        Array.from({ length: attemptCount }, () => repository.recordReleaseCiResult(releaseIntentId, identity)),
+      );
+
+      // Assert
+      expect(outcomes.filter((outcome) => outcome.outcome === "created")).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome.outcome === "already_recorded")).toHaveLength(attemptCount - 1);
+      const data = (await docRef.get()).data();
+      expect(data?.ci?.main?.runId).toBe(501);
+    });
+  });
 });

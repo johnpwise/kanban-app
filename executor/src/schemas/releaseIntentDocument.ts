@@ -65,6 +65,29 @@ const releasePullRequestResultSchema = z.object({
   recordedAt: z.instanceof(Timestamp),
 });
 
+/**
+ * The durably-recorded, immutable terminal CI evidence for one release Pull Request target (`main`
+ * or `develop`) — present only once `releaseIntentRepository.ts`'s `recordReleaseCiResult` has
+ * recorded one for that target. Self-contained: `number`/`headBranch`/`headSha` are snapshotted
+ * from the already-trusted, already-immutable `pullRequests.{target}` record at the moment CI was
+ * durably recorded (never independently caller-supplied), so this evidence alone is sufficient to
+ * distinguish one target's CI from the other, one PR from another, and one head SHA from another —
+ * without a reader needing to cross-reference `pullRequests.{target}` separately. Immutable once
+ * set: `state`/`runId`/`htmlUrl`/`conclusion` are never overwritten once recorded, even by a later
+ * GitHub Actions rerun of the same `runId` (see `recordReleaseCiResult`'s conflict contract).
+ */
+const releaseCiResultSchema = z.object({
+  number: z.number(),
+  baseBranch: branchNameSchema,
+  headBranch: branchNameSchema,
+  headSha: commitShaSchema,
+  state: z.enum(["succeeded", "failed"]),
+  runId: z.number(),
+  htmlUrl: z.string(),
+  conclusion: z.string().min(1).optional(),
+  recordedAt: z.instanceof(Timestamp),
+});
+
 /** Shape of a `releaseIntents/{releaseIntentId}` Firestore document's data. */
 export const releaseIntentDocumentSchema = z.object({
   releaseIntentId: z.string().min(1),
@@ -78,6 +101,12 @@ export const releaseIntentDocumentSchema = z.object({
     .object({
       main: releasePullRequestResultSchema.optional(),
       develop: releasePullRequestResultSchema.optional(),
+    })
+    .optional(),
+  ci: z
+    .object({
+      main: releaseCiResultSchema.optional(),
+      develop: releaseCiResultSchema.optional(),
     })
     .optional(),
 });

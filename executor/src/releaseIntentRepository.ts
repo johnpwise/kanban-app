@@ -56,6 +56,32 @@ export type RecordReleasePullRequestResultOutcome =
   | { outcome: "release_start_missing" }
   | { outcome: "release_start_identity_mismatch" };
 
+/** The trusted terminal CI evidence a release-CI controller has authoritatively observed via
+ * `observeReleaseCiForReleasePullRequest` (PR #66) for one target. `number` is the PR number CI
+ * was actually observed against — the sole caller-supplied anchor `recordReleaseCiResult`
+ * re-verifies inside its transaction against the durably persisted `pullRequests.{target}.number`;
+ * every other identity field (`repository`/`version`/`sourceBranch`/`sourceRevision`/`headBranch`/
+ * `headSha`) is deliberately never caller-supplied here — it is read straight from that already-
+ * immutable persisted record once the `number` match proves it is still the exact PR CI was
+ * observed against. */
+export interface ReleaseCiResultIdentity {
+  target: ReleasePullRequestTarget;
+  number: number;
+  state: "succeeded" | "failed";
+  runId: number;
+  htmlUrl: string;
+  conclusion?: string;
+}
+
+export type RecordReleaseCiResultOutcome =
+  | { outcome: "created" }
+  | { outcome: "already_recorded" }
+  | { outcome: "conflict" }
+  | { outcome: "release_intent_not_found" }
+  | { outcome: "release_intent_invalid" }
+  | { outcome: "release_pull_request_missing" }
+  | { outcome: "release_pull_request_identity_mismatch" };
+
 export interface ReleaseIntentRepository {
   /** Returns the raw document data, or `undefined` if no such document exists. Never writes. */
   loadReleaseIntentData(releaseIntentId: string): Promise<unknown | undefined>;
@@ -120,6 +146,38 @@ export interface ReleaseIntentRepository {
     releaseIntentId: string,
     identity: ReleasePullRequestResultIdentity,
   ): Promise<RecordReleasePullRequestResultOutcome>;
+  /**
+   * Durably records trusted, authoritatively-observed terminal CI evidence for one release Pull
+   * Request target (`main` or `develop`) on the existing `releaseIntents/{releaseIntentId}`
+   * document, associated with (never replacing) its immutable `pullRequests.{target}` result. Fails
+   * closed rather than writing when: the intent document does not exist
+   * (`release_intent_not_found`); it exists but fails `parseReleaseIntentDocument` schema
+   * validation (`release_intent_invalid`); it has no durable `pullRequests.{target}` result yet
+   * (`release_pull_request_missing`); or that persisted result's `number` disagrees with
+   * `identity.number` — the exact PR number CI was authoritatively observed against
+   * (`release_pull_request_identity_mismatch`) — this is the race-protection re-verification: a
+   * caller can never persist CI evidence against a release Pull Request identity that has since
+   * changed. Because `pullRequests.{target}` is itself immutable once written, a `number` match
+   * alone transitively proves `headBranch`/`headSha` (and the release intent's own immutable
+   * `repository`/`version`/`sourceBranch`/`sourceRevision`) still agree — those are read from that
+   * trusted persisted record, never from the caller, into the new `ci.{target}` evidence.
+   *
+   * Once those checks pass: if no CI result is present yet for `identity.target`, sets
+   * `{ number, baseBranch: identity.target, headBranch, headSha, state, runId, htmlUrl,
+   * conclusion?, recordedAt }` (headBranch/headSha from the persisted `pullRequests.{target}`; a
+   * Firestore server timestamp — never a caller-supplied value) at `ci.{target}` and returns
+   * `{ outcome: "created" }`. Idempotency identity is the *full* result tuple `(number, state,
+   * runId, htmlUrl, conclusion)` — deliberately stricter than a `(commitSha, state)` comparison so
+   * that a GitHub Actions rerun which reuses the same `runId` but produces a *different*
+   * `state`/`conclusion`/`htmlUrl` is never mistaken for an idempotent replay: if one is already
+   * present with the identical tuple (this call or a concurrent one committed first), returns
+   * `{ outcome: "already_recorded" }` without writing; if one is already present with *any*
+   * differing field, returns `{ outcome: "conflict" }` without writing — established terminal CI
+   * evidence is never silently overwritten. The other target's CI result, if any, is never read or
+   * touched. Read-check-write happens inside a single Firestore transaction, mirroring every other
+   * idempotent write in this module.
+   */
+  recordReleaseCiResult(releaseIntentId: string, identity: ReleaseCiResultIdentity): Promise<RecordReleaseCiResultOutcome>;
 }
 
 let firestore: Firestore | undefined;
@@ -289,6 +347,65 @@ export function createFirestoreReleaseIntentRepository(): ReleaseIntentRepositor
           existing.baseBranch === identity.target &&
           existing.headBranch === identity.releaseBranch &&
           existing.headSha === identity.commitSha
+        ) {
+          return { outcome: "already_recorded" };
+        }
+
+        return { outcome: "conflict" };
+      });
+    },
+
+    async recordReleaseCiResult(releaseIntentId: string, identity: ReleaseCiResultIdentity) {
+      const firestore = getReleaseIntentFirestore();
+      const docRef = firestore.collection(RELEASE_INTENTS_COLLECTION).doc(releaseIntentId);
+
+      return firestore.runTransaction<RecordReleaseCiResultOutcome>(async (transaction) => {
+        const snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) {
+          return { outcome: "release_intent_not_found" };
+        }
+
+        let intent;
+        try {
+          intent = parseReleaseIntentDocument(releaseIntentId, snapshot.data());
+        } catch {
+          return { outcome: "release_intent_invalid" };
+        }
+
+        const persistedPullRequest = intent.pullRequests?.[identity.target];
+        if (!persistedPullRequest) {
+          return { outcome: "release_pull_request_missing" };
+        }
+
+        if (persistedPullRequest.number !== identity.number) {
+          return { outcome: "release_pull_request_identity_mismatch" };
+        }
+
+        const existing = intent.ci?.[identity.target];
+
+        if (!existing) {
+          transaction.update(docRef, {
+            [`ci.${identity.target}`]: {
+              number: identity.number,
+              baseBranch: identity.target,
+              headBranch: persistedPullRequest.headBranch,
+              headSha: persistedPullRequest.headSha,
+              state: identity.state,
+              runId: identity.runId,
+              htmlUrl: identity.htmlUrl,
+              recordedAt: FieldValue.serverTimestamp(),
+              ...(identity.conclusion ? { conclusion: identity.conclusion } : {}),
+            },
+          });
+          return { outcome: "created" };
+        }
+
+        if (
+          existing.number === identity.number &&
+          existing.state === identity.state &&
+          existing.runId === identity.runId &&
+          existing.htmlUrl === identity.htmlUrl &&
+          existing.conclusion === identity.conclusion
         ) {
           return { outcome: "already_recorded" };
         }

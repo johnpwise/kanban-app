@@ -4,6 +4,7 @@ import {
   exitCodeForCiControllerOutcome,
   exitCodeForMergeControllerOutcome,
   exitCodeForOutcome,
+  exitCodeForReleaseCiControllerOutcome,
   exitCodeForReleaseControllerOutcome,
   exitCodeForReleasePullRequestControllerOutcome,
 } from "./exitCode";
@@ -299,6 +300,95 @@ describe("exitCodeForReleasePullRequestControllerOutcome", () => {
 
     // Act
     const code = exitCodeForReleasePullRequestControllerOutcome(outcome);
+
+    // Assert
+    expect(code).not.toBe(0);
+  });
+});
+
+describe("exitCodeForReleaseCiControllerOutcome", () => {
+  const RELEASE_INTENT_ID = "johnpwise__kanban-app--0.2.0";
+  const SUCCEEDED_MAIN = {
+    outcome: "release_ci_succeeded_recorded" as const,
+    releaseIntentId: RELEASE_INTENT_ID,
+    target: "main" as const,
+    number: 101,
+    runId: 501,
+    htmlUrl: "https://example.com/runs/501",
+    rounds: 1,
+  };
+  const SUCCEEDED_DEVELOP = { ...SUCCEEDED_MAIN, target: "develop" as const, number: 102, runId: 502 };
+  const ALREADY_RECORDED_MAIN = { ...SUCCEEDED_MAIN, outcome: "release_ci_succeeded_already_recorded" as const };
+  const FAILED_MAIN = {
+    outcome: "release_ci_failed_recorded" as const,
+    releaseIntentId: RELEASE_INTENT_ID,
+    target: "main" as const,
+    number: 101,
+    runId: 501,
+    htmlUrl: "https://example.com/runs/501",
+    conclusion: "failure",
+    rounds: 1,
+  };
+  const FAILED_ALREADY_RECORDED_DEVELOP = { ...FAILED_MAIN, outcome: "release_ci_failed_already_recorded" as const, target: "develop" as const };
+
+  it("returns 0 when both targets durably recorded a succeeded CI result", () => {
+    // Arrange
+    const outcome = { releaseIntentId: RELEASE_INTENT_ID, main: SUCCEEDED_MAIN, develop: SUCCEEDED_DEVELOP, rounds: 1 };
+
+    // Act
+    const code = exitCodeForReleaseCiControllerOutcome(outcome);
+
+    // Assert
+    expect(code).toBe(0);
+  });
+
+  it("returns 0 when both targets idempotently converge as already recorded", () => {
+    // Arrange
+    const outcome = { releaseIntentId: RELEASE_INTENT_ID, main: ALREADY_RECORDED_MAIN, develop: FAILED_ALREADY_RECORDED_DEVELOP, rounds: 1 };
+
+    // Act
+    const code = exitCodeForReleaseCiControllerOutcome(outcome);
+
+    // Assert
+    expect(code).toBe(0);
+  });
+
+  it("returns 0 when a target's durable terminal result is a genuine CI failure (correctly observed and persisted, not a controller failure)", () => {
+    // Arrange
+    const outcome = { releaseIntentId: RELEASE_INTENT_ID, main: FAILED_MAIN, develop: SUCCEEDED_DEVELOP, rounds: 1 };
+
+    // Act
+    const code = exitCodeForReleaseCiControllerOutcome(outcome);
+
+    // Assert
+    expect(code).toBe(0);
+  });
+
+  it("returns a non-zero code when only one target reached a durable terminal result", () => {
+    // Arrange
+    const outcome = {
+      releaseIntentId: RELEASE_INTENT_ID,
+      main: SUCCEEDED_MAIN,
+      develop: { outcome: "release_ci_exhausted" as const, releaseIntentId: RELEASE_INTENT_ID, target: "develop" as const, rounds: 55 },
+    };
+
+    // Act
+    const code = exitCodeForReleaseCiControllerOutcome(outcome);
+
+    // Assert
+    expect(code).not.toBe(0);
+  });
+
+  it("returns a non-zero code when neither target reached a durable terminal result", () => {
+    // Arrange
+    const outcome = {
+      releaseIntentId: RELEASE_INTENT_ID,
+      main: { outcome: "ci_unbound" as const, releaseIntentId: RELEASE_INTENT_ID, target: "main" as const, number: 101, rounds: 1 },
+      develop: { outcome: "release_ci_result_conflict" as const, releaseIntentId: RELEASE_INTENT_ID, target: "develop" as const, rounds: 1 },
+    };
+
+    // Act
+    const code = exitCodeForReleaseCiControllerOutcome(outcome);
 
     // Assert
     expect(code).not.toBe(0);
