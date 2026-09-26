@@ -691,5 +691,6 @@ deploy-ci-controller-job) cmd_deploy_ci_controller_job ;;
 deploy-merge-controller-job) cmd_deploy_merge_controller_job ;;
 deploy-release-controller-job) cmd_deploy_release_controller_job ;;
 deploy-release-pr-controller-job) cmd_deploy_release_pr_controller_job ;;
+deploy-release-ci-controller-job) cmd_deploy_release_ci_controller_job ;;
 execute) cmd_execute "${2:-}" "${3:-}" "${4:-}" ;;
 esac
