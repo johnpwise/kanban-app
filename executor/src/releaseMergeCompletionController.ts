@@ -27,7 +27,7 @@ export interface RunReleaseMergeCompletionControllerParams {
   logger?: ExecutorLogger;
 }
 
-export type ReleaseMergeCompletionOutcome =
+export type ReleaseMergeCompletionControllerOutcome =
   | {
       outcome: "release_merge_recorded";
       releaseIntentId: string;
@@ -88,7 +88,7 @@ export type ReleaseMergeCompletionOutcome =
  */
 export async function runReleaseMergeCompletionController(
   params: RunReleaseMergeCompletionControllerParams,
-): Promise<ReleaseMergeCompletionOutcome> {
+): Promise<ReleaseMergeCompletionControllerOutcome> {
   const { releaseIntentId, target, executeEligibleReleaseMerge, repository, logger } = params;
 
   const executionOutcome = await executeEligibleReleaseMerge(releaseIntentId, target);
