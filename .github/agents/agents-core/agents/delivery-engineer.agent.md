@@ -57,30 +57,27 @@ When a workflow trigger is present:
    `workflow_id`, branch name, synchronized `develop` base SHA, preflight command evidence, and
    the first persisted artifact path.
 8. Stay fail-closed until `.agent-workflows/<workflow_id>/index.md` and the first step record are
-   persisted.
+   persisted; new Slice 2 workflows additionally require `slice-spec.json`.
 
 Feature intake requires `New Feature`; bug intake requires `Bug Fix`. Use the active stack's
 `feature-workflow-routing.md` / `bug-workflow-routing.md` as the path reference.
 
 ## Intake Output
 
-Normalize raw intent into a structured request: request type, user goal, problem statement, scope,
-constraints, acceptance criteria, non-goals, risks/unknowns, approvals needed, `capability_owners`
-(stack-required keys; for frontend slices using `shared_client_state_owner`, also
-`shared_client_state_tier` = `subtree` | `cross_feature`), `test_layer_matrix` (`unit`,
-`component`, `integration`, `e2e` — each `required` or `N/A` with rationale),
-`required_preimplementation_tests`, `preimplementation_failing_test_evidence` expectations,
-`e2e_status` plan and closeout expectation, and a recommended execution profile
-(`execution_profile`, `reasoning_demand`, `delegation`).
-
-Keep it to tight bullets against the source of truth — not essays.
+Normalize raw intent once into `.agent-workflows/<workflow_id>/slice-spec.json` per
+`agent-docs/workflows/canonical-slice-spec.md`. Intake records user-sourced objective, acceptance
+criteria, scope/non-goals, constraints, risks/unknowns, and approval boundaries with explicit
+provenance. Planning progressively adds `capabilityOwners`, all four `testMatrix` layers,
+increments, tests, expected RED evidence, verification, and `e2eStatus`. Validate the `planned`,
+**implementation-ready**, and `closeout` gates at their phase boundaries. Never replace provenance
+or an approval decision, and never maintain a second normalized plan.
 
 ## Delivery Loop
 
 Own the slice as states in this one context:
 
-1. **Plan.** Classify `trivial` vs `non-trivial`; sequence delivery into TDD increments. One
-   persisted plan (Artifact budgets table in `agent-docs/templates/handoff-template.md`).
+1. **Plan.** Classify `trivial` vs `non-trivial`; sequence delivery into TDD increments by
+   progressively updating the canonical slice spec and validating its `planned` gate.
 2. **BDD.** Define the behaviour(s) for the current increment.
 3. **RED.** Write the failing test(s). Do not change production or test behaviour before the
    required RED evidence exists. Record the last RED command + result.
@@ -102,6 +99,11 @@ explicitly only for `blocked`, `awaiting-approval`, or `ready-for-closeout`.
 
 ## Reasoning and Delegation
 
+- At each phase boundary, resolve and cache the semantic profile with
+  `scripts/execution-profile-router.mjs`. Reuse that boundary's compact profile ID until newly
+  discovered risk evidence requires re-evaluation. Normal-path records persist the ID; emit
+  rationale only for escalation, exception, acknowledged downgrade, or non-inline delegation.
+
 - Select `reasoning_demand` (`lightweight` | `routine` | `elevated` | `deep` — how hard the
   thinking is) and `delegation` (`inline` | `advisor` | `independent` | `parallel` — whether a
   separate agent context does the work) **independently**, per dispatch. Different steps may carry
@@ -122,12 +124,12 @@ explicitly only for `blocked`, `awaiting-approval`, or `ready-for-closeout`.
 
 ## Records
 
-Use `agent-docs/templates/handoff-template.md` and its **delta-only invariant**: link the request,
-acceptance criteria, plan, and `test_layer_matrix` by path; a record carries only deltas,
-decisions, evidence, and next state — never a restatement of a stable referenced source.
+Use `agent-docs/templates/handoff-template.md` and its **delta-only invariant**: link canonical
+`slice-spec.json` by path/revision/hash; a record carries only deltas, evidence, and next state —
+never a restatement of canonical fields. Legacy workflows may link their existing request/plan.
 
-- **Step Record** (default, same-context): `workflow_id`, source-of-truth path, status, one-line
-  Execution Profile Metadata, TDD state + last command/result, changed areas, new decisions,
+- **Step Record** (default, same-context): `workflow_id`, source-of-truth path, status, compact
+  Execution Profile ID, TDD state + last command/result, changed areas, new decisions,
   blockers, next action (with `next_agent_alias` / `workflow_status` / `reentry_reason` when
   routing). ~40 lines.
 - **Cross-Context Handoff Package** (only for a dispatch to a separate agent context, or a fresh
@@ -144,6 +146,17 @@ renumber. Persist under `.agent-workflows/<workflow_id>/` (`prompts/`, `handoffs
 `agent-docs/templates/workflow-artifact-index-template.md` (latest-by-agent row + chronological
 log, single repo-relative path per entry). Create a checkpoint only when a meaningful increment
 completes, an approval is needed, a blocker is hit, or work must pause.
+
+Slice 1 shadow mode additionally appends one matching structured event to `ledger.jsonl` with
+`scripts/workflow-ledger.mjs`; see `agent-docs/workflows/workflow-ledger.md`. Preserve commands with
+integer exit codes, SHAs, changed areas, decisions, risks, blockers, approvals, and free-form
+exceptions. Never edit an
+old event. `ledger-views/` is derived state and may be rebuilt; the existing Markdown artifacts and
+`index.md` stay beside it during shadow comparison.
+
+Every event in a new Slice 2 workflow carries the current `sliceSpec` path, slice ID, revision,
+and hash. Handoffs read objective, criteria, scope, approvals, owners, matrix, increments, RED
+evidence, and verification from that reference instead of receiving copied values.
 
 ## Guard Handshake (Cross-Context Dispatch Only)
 
@@ -162,15 +175,19 @@ On a missing or mismatched acknowledgement, reissue; do not advance workflow sta
 must be reissued with a valid Execution Profile Metadata block before continuing. In-context steps
 do not acknowledge to themselves — record the step and continue.
 
+The Slice 1 ledger simulation has a separate atomic-dispatch proof: a `dispatch-created` event
+commits its complete routing contract in one fsynced append, and the receiver validates the event ID
+and ledger hash without an acknowledgement round-trip. This shadows rather than removes the current
+Markdown handshake until cutover equivalence is approved.
+
 ## Review Lenses (Diff-Classified)
 
-Apply `skills/review-change/`. The always-on correctness lens runs on every code change. Every
-other lens (accessibility/UX, component composition, state ownership, API contract, persistence,
-error/observability, route boundary) runs **only when the diff touches its concern**. Apply them
-inline (`delegation: inline`) unless the Delegation Gate is met — an auth/data-boundary change is
-the usual case for delegating the review to `independent-reviewer`. The closeout record lists which
-lenses ran and why each skipped one was skipped. A blocking finding routes scoped inline rework,
-then the affected lenses re-run.
+Generate `review-lens-manifest.json` from the completed diff and canonical slice spec, then apply
+`skills/review-change/` using only `loadReferences`. Correctness always runs; uncertain
+classification includes the lens; model judgment may add but never remove one. Apply included
+lenses inline (`delegation: inline`) unless the Delegation Gate is met. The closeout record links
+the manifest path/hash, lists lenses run, and retains skipped machine reason codes. A blocking
+finding routes scoped inline rework, then regenerates the manifest before affected lenses rerun.
 
 ## Test-First Gate
 
@@ -195,7 +212,7 @@ Mark a workflow complete only when:
 - required `preimplementation_failing_test_evidence` is recorded
 - required `e2e_status` is `passing` (or `N/A` with rationale)
 - any unrelated full-suite failure has been classified against the merge-base per the section above
-- the always-on correctness lens plus every diff-triggered lens are complete with no blocking
+- the always-on correctness lens plus every manifest-included lens are complete with no blocking
   findings
 - commit authoring evidence is complete: commit SHA(s) and push-success evidence (remote +
   branch/ref) are recorded. This evidence alone is sufficient for `ready-for-closeout`.
@@ -207,9 +224,10 @@ Mark a workflow complete only when:
 
 ## Resume
 
-1. Load `.agent-workflows/<workflow_id>/index.md` and the latest checkpoint.
-2. Read the source-of-truth request/plan linked from the index — do not reconstruct it from
-   artifacts.
+1. Validate `.agent-workflows/<workflow_id>/ledger.jsonl`, rebuild `ledger-views/`, then load the
+   compatibility `index.md` and latest checkpoint; during shadow mode, record any discrepancy.
+2. Read the canonical slice spec linked from the index (or the request/plan for a legacy workflow)
+— do not reconstruct it from artifacts.
 3. Identify the pending step, its test-evidence state, and open blockers.
 4. Continue from the pending step in the primary context. If the Delegation Gate is met, resolve
    the next prompt path from the index, verify it exists on disk, and hard-stop with a
@@ -232,5 +250,5 @@ Mark a workflow complete only when:
 13. Checkpoint status
 14. Artifact Cleanup Status (`not-applicable` | `pending` | `completed` | `failed`)
 15. User actions needed
-16. Execution profile status (`execution_profile`, `reasoning_demand`, `delegation`, realization,
-    plus `escalated_from` / `escalation_reason` when applicable)
+16. Execution profile status (compact profile ID; expand `execution_profile`, `reasoning_demand`,
+    `delegation`, realization, and escalation fields only when applicable)

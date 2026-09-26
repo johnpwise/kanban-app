@@ -22,7 +22,8 @@ does it*. These are decided separately:
 ## Reasoning-Demand Selection Procedure
 
 `routine` is the default. For every dispatch, raise the level only when the work genuinely calls for
-it, and record the judgement in `rationale`:
+it, and record the judgement in the phase cache's structured evidence (plus free-form `rationale`
+only for escalation, exception, acknowledged downgrade, or non-inline delegation):
 
 1. Use `lightweight` when the work is mechanical and deterministic (rename, version bump, a
    single-line correction against a pre-written failing test).
@@ -48,7 +49,16 @@ it, and record the judgement in `rationale`:
 
 The four judgement inputs are structured but not fully objective — reviewers can disagree on where a
 dispatch sits. The procedure fixes the default (`routine`) and the order of consideration; every
-judgement call is recorded in `rationale`.
+judgement call is retained in the phase cache even when no free-form rationale is emitted.
+
+## Phase-Boundary Resolution
+
+Apply this procedure through `scripts/execution-profile-router.mjs` on entry to a new phase
+boundary. The content-addressed result is cached and normal-path records carry only its compact
+profile ID. Within that boundary, re-evaluate only when new structured risk evidence appears or a
+higher delegation level is proposed. Routine inline selection needs no repeated free-form
+`rationale`; the cache evidence is its explanation. Escalations, exceptions, acknowledged
+downgrades, and non-inline delegation still record rationale.
 
 ## Delegation Gate
 

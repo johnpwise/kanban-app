@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution-profile-cache.schema.json",
+  "title": "Execution profile phase-boundary cache",
+  "type": "object",
+  "required": ["schemaVersion", "workflowId", "profiles", "boundaries", "hash"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "workflowId": { "type": "string", "minLength": 1 },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "profileId",
+          "name",
+          "capability",
+          "reasoningDemand",
+          "delegation",
+          "risk",
+          "scope",
+          "reversibility",
+          "verification"
+        ],
+        "properties": {
+          "profileId": { "type": "string", "pattern": "^ep-[a-f0-9]{12}$" },
+          "name": { "type": "string", "minLength": 1 },
+          "capability": {
+            "enum": ["analysis", "synthesis", "code-generation", "verification", "coordination"]
+          },
+          "reasoningDemand": { "enum": ["lightweight", "routine", "elevated", "deep"] },
+          "delegation": { "enum": ["inline", "advisor", "independent", "parallel"] },
+          "risk": { "enum": ["low", "moderate", "high", "severe"] },
+          "scope": { "enum": ["local", "module", "cross-module", "system-wide"] },
+          "reversibility": {
+            "enum": ["easily-reversible", "reversible-with-effort", "hard-to-reverse"]
+          },
+          "verification": {
+            "enum": ["deterministic-check", "test-backed", "review-backed", "multi-specialist-verification"]
+          },
+          "rationale": { "type": "string", "minLength": 1 },
+          "escalatedFrom": { "type": "string", "pattern": "^ep-[a-f0-9]{12}$" },
+          "escalationReason": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "boundaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["boundaryId", "phase", "profileId", "evidence"],
+        "properties": {
+          "boundaryId": { "type": "string", "minLength": 1 },
+          "phase": {
+            "enum": [
+              "exploration",
+              "planning",
+              "architecture",
+              "testing",
+              "implementation",
+              "debugging",
+              "review",
+              "verification",
+              "delivery",
+              "orchestration"
+            ]
+          },
+          "profileId": { "type": "string", "pattern": "^ep-[a-f0-9]{12}$" },
+          "evidence": {
+            "type": "object",
+            "required": ["signals", "risk", "scope", "reversibility", "fingerprint"],
+            "properties": {
+              "signals": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "uniqueItems": true
+              },
+              "risk": { "enum": ["low", "moderate", "high", "severe"] },
+              "scope": { "enum": ["local", "module", "cross-module", "system-wide"] },
+              "reversibility": {
+                "enum": ["easily-reversible", "reversible-with-effort", "hard-to-reverse"]
+              },
+              "verification": {
+                "enum": ["deterministic-check", "test-backed", "review-backed", "multi-specialist-verification"]
+              },
+              "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

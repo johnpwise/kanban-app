@@ -11,10 +11,14 @@ Use this prompt when you want workflow steps to run to closeout without stopping
   `.github/agents/agents-core/agent-docs/routing/reasoning-selection-policy.md` is met (genuine
   independence, material second-opinion value, context pollution, or an unresolved specialised
   decision). File count, module count, and "non-trivial" are not reasons.
-- Persist a compact **Step Record** per step under `.agent-workflows/<workflow_id>/` (delta-only —
-  link the request/plan/acceptance criteria, do not restate them). Emit `Saved Artifact` +
+- Create and progressively populate `.agent-workflows/<workflow_id>/slice-spec.json`; persist a
+  compact **Step Record** per step (delta-only — link the spec by revision/hash, do not restate
+  it). Emit `Saved Artifact` +
   `Workflow Index` paths; emit a Fresh Context Bootstrap / completion block only for a cross-context
   dispatch or a reentry state.
+- In Slice 1 shadow mode, append the matching structured ledger event and regenerate
+  `ledger-views/`; every new Slice 2 event retains the slice-spec reference. Keep the existing
+  Markdown artifact beside it for equivalence comparison.
 - Do not change production behaviour before the required RED evidence exists.
 
 ## Bug workflow starter

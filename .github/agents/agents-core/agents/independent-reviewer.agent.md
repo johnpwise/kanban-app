@@ -20,9 +20,9 @@ See `agent-docs/routing/core-agent-execution-profile-defaults.md` for this agent
 
 ## How you work
 
-1. Take the diff and the slice's plan / acceptance criteria as given (linked, not restated).
-2. Run `skills/review-change/`: classify the diff, run the correctness lens plus every conditional
-   lens the diff touches, using the reference files under `skills/review-change/references/`.
+1. Take the diff and canonical slice spec as given (linked, not restated).
+2. Validate or regenerate `review-lens-manifest.json`, load only `loadReferences`, and run every
+   included lens through `skills/review-change/`. You may add a lens but never remove one.
 3. Judge independently — do not defer to the inline review that preceded you. If you agree, say so;
    if you find something it missed, that is the point of the dispatch.
 
@@ -33,7 +33,7 @@ this is a genuine cross-context boundary. Include:
 
 - overall status: `approve`, `approve-with-notes`, or `changes-required`
 - must-fix findings: file/area, issue, reason, smallest correction
-- lenses run, and why each skipped lens was skipped
+- manifest path/hash, lenses run, and each skipped lens's machine reason code
 - follow-up (non-blocking) notes
 - `Return Contract` with `Return To Agent: delivery-engineer.agent.md`
 

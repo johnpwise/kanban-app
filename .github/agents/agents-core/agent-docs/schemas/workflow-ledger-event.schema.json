@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflow-ledger-event.schema.json",
+  "title": "Workflow ledger event",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "previousHash",
+    "hash",
+    "type",
+    "workflowId",
+    "recordedAt",
+    "actor",
+    "status",
+    "sourceOfTruth",
+    "summary",
+    "nextAction",
+    "commands",
+    "shas",
+    "changedAreas",
+    "decisions",
+    "risks",
+    "blockers",
+    "approvals",
+    "exceptions"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "eventId": { "type": "string", "pattern": "^event-[0-9]{6}$" },
+    "previousHash": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      ]
+    },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "type": {
+      "enum": [
+        "workflow-started",
+        "step-recorded",
+        "checkpoint-recorded",
+        "dispatch-created",
+        "handoff-returned",
+        "exception-recorded",
+        "closeout-recorded"
+      ]
+    },
+    "workflowId": { "type": "string", "minLength": 1 },
+    "recordedAt": { "type": "string", "format": "date-time" },
+    "actor": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": [
+        "in-progress",
+        "blocked",
+        "awaiting-approval",
+        "ready-to-resume",
+        "ready-for-closeout",
+        "closed"
+      ]
+    },
+    "sourceOfTruth": { "type": "string", "minLength": 1 },
+    "sliceSpec": {
+      "type": "object",
+      "required": ["path", "sliceId", "revision", "hash"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sliceId": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "summary": { "type": "string", "minLength": 1 },
+    "nextAction": { "type": "string", "minLength": 1 },
+    "tdd": {
+      "type": "object",
+      "required": ["state", "command", "result", "exitCode"],
+      "properties": {
+        "state": { "enum": ["red", "green", "refactor", "n/a"] },
+        "command": { "type": "string", "minLength": 1 },
+        "result": { "type": "string", "minLength": 1 },
+        "exitCode": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["command", "exitCode", "result"],
+        "properties": {
+          "command": { "type": "string", "minLength": 1 },
+          "exitCode": { "type": "integer" },
+          "result": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "shas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "value"],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1 },
+          "value": { "type": "string", "pattern": "^[a-fA-F0-9]{7,64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "changedAreas": { "$ref": "#/$defs/stringList" },
+    "decisions": { "$ref": "#/$defs/stringList" },
+    "risks": { "$ref": "#/$defs/stringList" },
+    "blockers": { "$ref": "#/$defs/stringList" },
+    "approvals": { "$ref": "#/$defs/stringList" },
+    "exceptions": { "$ref": "#/$defs/stringList" },
+    "executionProfile": {
+      "type": "object",
+      "required": [
+        "name",
+        "capability",
+        "reasoningDemand",
+        "delegation",
+        "risk",
+        "scope",
+        "reversibility",
+        "verification",
+        "rationale"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "capability": {
+          "enum": ["analysis", "synthesis", "code-generation", "verification", "coordination"]
+        },
+        "reasoningDemand": { "enum": ["lightweight", "routine", "elevated", "deep"] },
+        "delegation": { "enum": ["inline", "advisor", "independent", "parallel"] },
+        "risk": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "reversibility": { "type": "string", "minLength": 1 },
+        "verification": { "type": "string", "minLength": 1 },
+        "rationale": { "type": "string", "minLength": 1 },
+        "escalatedFrom": { "type": "string", "minLength": 1 },
+        "escalationReason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "executionProfileId": { "type": "string", "pattern": "^ep-[a-f0-9]{12}$" },
+    "routing": {
+      "type": "object",
+      "required": [
+        "from",
+        "to",
+        "returnToAgent",
+        "nextAgentAlias",
+        "workflowStatus",
+        "reentryReason"
+      ],
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "returnToAgent": { "type": "string", "minLength": 1 },
+        "nextAgentAlias": { "type": "string", "minLength": 1 },
+        "workflowStatus": { "type": "string", "minLength": 1 },
+        "reentryReason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "sourcePointers": { "$ref": "#/$defs/stringList" },
+    "expectedOutput": { "type": "string", "minLength": 1 },
+    "dispatchEventId": { "type": "string", "pattern": "^event-[0-9]{6}$" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "dispatch-created" } } },
+      "then": {
+        "required": ["routing", "sourcePointers", "expectedOutput"],
+        "oneOf": [
+          { "required": ["executionProfile"], "not": { "required": ["executionProfileId"] } },
+          { "required": ["executionProfileId"], "not": { "required": ["executionProfile"] } }
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "handoff-returned" } } },
+      "then": { "required": ["dispatchEventId"] }
+    }
+  ],
+  "$defs": {
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}

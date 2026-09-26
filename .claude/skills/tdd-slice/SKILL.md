@@ -16,6 +16,9 @@ Vocabulary in `skills/feature-planning/SKILL.md` for slice / increment / behavio
    frontend increment using `shared_client_state_owner`, `shared_client_state_tier`).
 2. Write the `required_preimplementation_tests` for the new behaviour.
 3. Run them and confirm they **fail for the right reason**. Record the exact command and result.
+   For a new Slice 2 workflow, update each matching `expectedRedEvidence` entry to `captured` with
+   command, non-zero exit code, and observed failure, then validate the canonical slice spec at
+   `implementation-ready`.
 4. Do not edit production behaviour until this failing evidence exists. Verify with:
 
    ```sh
@@ -60,7 +63,8 @@ level. Before the increment is done, explicitly check and record:
   runtime contracts changed, either preserve backward compatibility or document the breaking
   change with migration steps. Never leave the impact implicit.
 
-Record, as yes/no + explanation: production composition change; test-only behaviour in production
+Record in the canonical slice spec's observations/verification as yes/no + explanation:
+production composition change; test-only behaviour in production
 code; persistence impact; config/env impact; DI/injected-option impact; backward-compatibility
 status (preserved / broken + justification); migration or documentation required.
 

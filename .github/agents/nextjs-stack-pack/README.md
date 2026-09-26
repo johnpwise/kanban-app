@@ -61,9 +61,9 @@ This pack adds two doc categories the `react-stack-pack` does not need, because 
 renders on the server and exposes real HTTP/mutation boundaries that a Vite SPA does not have:
 `standards/architecture/nextjs-server-client-boundary-standards.md` (Server/Client Component
 ownership, Route Handlers, Server Actions, separate-backend policy) and
-`standards/coding/runtime-validation-standards.md` (the Zod trust-boundary contract). It replaces
-the React pack's Cypress standard with `standards/coding/playwright-test-file-coding-standards.md`,
-and adds `standards/reliability/error-handling-and-caching-standards.md` for `error.tsx` /
+`standards/coding/runtime-validation-standards.md` (the Zod trust-boundary contract). It shares the
+stack-wide `standards/coding/playwright-test-file-coding-standards.md` convention and adds
+`standards/reliability/error-handling-and-caching-standards.md` for `error.tsx` /
 `not-found.tsx` / `loading.tsx` and caching/revalidation ownership.
 
 ## Usage
@@ -86,8 +86,8 @@ and adds `standards/reliability/error-handling-and-caching-standards.md` for `er
 
 ## Adoption notes
 
-This is the first pass of the Next.js stack pack, introduced alongside the existing `react` (Vite
-SPA) and `vue` stacks without changing their behavior.
+This Next.js stack pack is designed to sit alongside the React (Vite SPA) and Vue stacks while
+preserving their distinct framework and runtime responsibilities.
 
 Copy these files together:
 

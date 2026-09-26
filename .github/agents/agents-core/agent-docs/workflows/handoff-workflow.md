@@ -10,7 +10,10 @@ a separate agent context is used only when the Delegation Gate is met.
 
 1. One delivery slice has one active owner: `delivery-engineer`.
 2. `delivery-engineer` records each step; only a step handed to a separate agent context is dispatched as a **Cross-Context Handoff Package**.
-3. Records follow `agent-docs/templates/handoff-template.md` and its **delta-only invariant**: never restate information available through a stable referenced source (the request, acceptance criteria, plan, `test_layer_matrix`) — link to it by path and record only deltas, decisions, evidence, and next state.
+3. Records follow `agent-docs/templates/handoff-template.md` and its **delta-only invariant**: for
+   a new workflow, link the canonical `slice-spec.json` by path/revision/hash and record only
+   deltas, evidence, and next state; never restate its fields. Legacy workflows may link their
+   existing request/plan.
 4. Same-context steps use the compact **Step Record**. Only a dispatch to a **separate agent context** (`delegation: advisor` / `independent` / `parallel`, or a fresh resume window) uses the full **Cross-Context Handoff Package**, and only that shape begins with line 1 `Use agent spec: <Agent-Spec-Alias>` (alias from `agent-docs/routing/agent-spec-alias-map.md`, never a path form).
 5. The guard acknowledgement ritual (`Active Agent` + `Execution Profile` + `Reasoning Demand` + `Delegation` echoed back before work) applies **only to a separate agent context**. In-context steps do not acknowledge to themselves.
 6. For a Cross-Context Handoff Package, the receiving context must acknowledge before starting; the dispatcher reissues on a missing or mismatched acknowledgement.
@@ -28,6 +31,20 @@ a separate agent context is used only when the Delegation Gate is met.
 18. Every prompt and every Cross-Context Handoff Package carries the full Execution Profile Metadata block (`execution_profile`, `capability`, `reasoning_demand`, `delegation`, `risk`, `scope`, `reversibility`, `verification`, `rationale`) per `agent-docs/routing/execution-profile-schema.md`. A Step Record carries the one-line form (profile | `reasoning_demand` | `delegation` | rationale).
 19. Execution profile assignment is per-dispatch: successive dispatches within one workflow may use different profiles, and a specialist may escalate its own `reasoning_demand` or propose raising `delegation` but must never silently downgrade a `reasoning_demand` or `delegation` assigned by the dispatching orchestrator or a prior escalation.
 20. `reasoning_demand` (`lightweight`, `routine`, `elevated`, `deep`) and `delegation` (`inline`, `advisor`, `independent`, `parallel`) are independent decisions. Per the Realization Rule in `agent-docs/routing/reasoning-selection-policy.md`: `reasoning_demand` is advisory model/effort at every level and never by itself forces a separate context; `delegation: inline` (the default) runs in the primary context, and `advisor`/`independent`/`parallel` are dispatched through the `Agent` tool with each subagent's model set from its own `reasoning_demand`. Difficulty alone never raises `delegation` — see the Delegation Gate.
+21. During Slice 1 shadow mode, append one equivalent event to `ledger.jsonl` after each existing Markdown artifact and derive `ledger-views/`; never edit ledger history or treat a derived view as independent state.
+
+## Workflow Event Ledger v1 (Shadow Mode)
+
+Follow `workflow-ledger.md` and its JSON schema. The current Markdown layout below remains in place
+beside the ledger while equivalence is measured. Each event preserves commands with exit results,
+SHAs, changed areas, decisions, risks, blockers, approvals, and free-form exceptions. The ledger is
+hash-chained; the views are disposable and recoverable.
+
+A ledger cross-context simulation appends one complete `dispatch-created` event. That append is the
+atomic dispatch commit: the receiver validates its event ID and hash and starts without an
+acknowledgement round-trip. Append `handoff-returned` to resolve it. This simulation does not relax
+the Delegation Gate, execution-profile floor, alias validation, or return contract, and does not
+remove the compatibility artifact during shadow mode.
 
 ## Workflow Artifact Index v1 (Required)
 
@@ -93,9 +110,9 @@ agents:
    decision.
 4. For each increment — `skills/tdd-slice/` inline: RED (failing tests first), GREEN, REFACTOR,
    verify.
-5. Apply `skills/review-change/` inline — the always-on correctness lens plus every diff-triggered
-   review lens.
-6. A blocking finding routes scoped rework inline, then the affected lenses re-run.
+5. Generate the conservative review-lens manifest; load only `loadReferences` and apply every
+   included lens inline via `skills/review-change/`.
+6. A blocking finding routes scoped rework inline, then the manifest is regenerated before reruns.
 7. Commit + push via the `commit-and-push` skill.
 
 A dependency decision is assessed inline with `skills/dependency-assessment/`. A genuinely independent review
@@ -110,7 +127,7 @@ Same one-context model:
    `architecture-advisor` only if the Gate is met).
 3. `skills/tdd-slice/` inline: produce failing `required_preimplementation_tests`, then apply the
    fix, then REFACTOR and verify.
-4. Apply `skills/review-change/` — the diff-classified review lenses; route rework inline if required.
+4. Generate the review-lens manifest and apply its included lenses; route rework inline if required.
 5. Commit + push; close or record follow-up.
 
 ## Workflow Dispatch Loop
@@ -130,8 +147,9 @@ For each cycle the workflow owner:
 
 ## Record Requirements
 
-Every record obeys the **delta-only invariant**: link the request, acceptance criteria, plan, and
-`test_layer_matrix` by path; never copy them in.
+Every record obeys the **delta-only invariant**: for new workflows, link canonical
+`slice-spec.json` by path/revision/hash and never copy its fields. Legacy workflows may link their
+existing request/plan.
 
 A **Step Record** includes: workflow id, source-of-truth path, status, one-line Execution Profile
 Metadata, TDD state + last command/result, changed areas, new decisions, blockers, next action
@@ -181,14 +199,16 @@ Create a checkpoint when:
 - context needs to be resumed later
 
 Use `agent-docs/templates/checkpoint-template.md` (a compact Step Record). Keep it under ~30 lines
-and reference the source-of-truth plan rather than restating it.
+and reference the canonical slice spec rather than restating it.
 Allocate the next Artifact ID before storing each checkpoint at `.agent-workflows/<workflow_id>/checkpoints/artifact-NNN-<descriptive-slug>.checkpoint.md`, then log it in `index.md`.
 
 ## Resume Procedure
 
 When resuming from a fresh context:
-1. Load `.agent-workflows/<workflow_id>/index.md` and the latest checkpoint.
-2. Read the source-of-truth request/plan (linked from the index) — do not reconstruct it from artifacts.
+1. Validate `ledger.jsonl` and rebuild `ledger-views/`, then load the compatibility `index.md` and
+   latest checkpoint; record any shadow discrepancy as an exception event.
+2. Read the canonical slice spec (or legacy request/plan) linked from the index — do not
+   reconstruct it from artifacts.
 3. Identify the pending step, its test-evidence state, and open blockers from the checkpoint.
 4. Resume from the pending step, keeping it in the primary context unless the Delegation Gate is met.
 

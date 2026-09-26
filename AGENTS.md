@@ -108,9 +108,9 @@ Coding standards for generated Next.js code/tests are inherited from:
 * Default `Return To Agent` is `delivery-engineer.agent.md` unless an incoming handoff explicitly overrides it.
 * One primary context owns the slice; re-enter the workflow-owner role explicitly only for `blocked`, `awaiting-approval`, or `ready-for-closeout`.
 * Complexity is classified `trivial` vs `non-trivial` and the delivery is sequenced into TDD increments — inline, not a separate agent.
-* Review is applied inline via `skills/review-change/`: the correctness lens runs on every code change; the accessibility, composition, state-ownership, and nextjs-boundary lenses are diff-classified. Delegate to `independent-reviewer.agent.md` only when the Delegation Gate is met.
+* Review is applied inline via `skills/review-change/` from `review-lens-manifest.json`: correctness always; uncertainty includes; model additions only; load only `loadReferences`. Delegate only when the Delegation Gate is met.
 * API contract modelling is a plan-time use of the `skills/review-change/` api-contracts lens.
-* A blocking review-lens finding routes scoped rework inline, then the affected lenses re-run.
+* A blocking review-lens finding routes scoped rework inline, then the manifest is regenerated before reruns.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

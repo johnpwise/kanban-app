@@ -43,9 +43,10 @@ Use this checklist before a frontend change is considered PR-ready.
 - diff is scoped
 - unrelated cleanup is excluded
 - new abstractions were introduced only if they earned their cost
-- the diff was classified and the closeout step record lists which review lenses ran and why each skipped one was skipped (see `feature-workflow-routing.md` / `bug-workflow-routing.md`)
+- `review-lens-manifest.json` validates against the completed diff/slice spec and the closeout record links its path/hash
+- skipped lenses retain machine reason codes and only `loadReferences` were loaded
 - the always-on correctness lens (`skills/review-change/references/correctness.md`) is not `changes-required`
-- every diff-triggered lens (accessibility, composition, state-ownership, contract) is complete with no blocking findings
+- every manifest-included lens is complete with no blocking findings
 - when a review-lens finding triggered rework, the rework and the applicable lens reruns are complete
 
 ### Accessibility / UX

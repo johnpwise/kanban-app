@@ -4,9 +4,11 @@ Use this template to capture a feature request in a structured, implementation-r
 
 ## Purpose
 
-Describe the user problem, desired outcome, and constraints clearly enough for planning and
-execution. This document is the **source of truth** other workflow records link to — keep each
-section to a few tight lines (bullets, not paragraphs); it is not a place for essays.
+Describe the user problem, desired outcome, and constraints clearly enough for normalization.
+After trigger validation, write these facts once to the workflow's canonical
+`.agent-workflows/<workflow_id>/slice-spec.json` with `sourceType: user`; that file becomes the
+source of truth for planning, ledger events, checkpoints, and handoffs. Keep this intake concise
+and do not preserve a second normalized copy.
 
 ## Workflow Intake Envelope (Required)
 
@@ -70,3 +72,9 @@ This template captures feature details only. Before submitting, prepend the acti
 
 - How should success be verified?
 - What would count as done?
+
+## Canonicalization Result (Workflow Owner)
+
+- **Slice spec:** `.agent-workflows/<workflow_id>/slice-spec.json`
+- **Slice ID / revision:**
+- **Unresolved intake fields:** (none, or fields requiring user clarification)

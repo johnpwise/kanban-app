@@ -1,16 +1,16 @@
 {
-  "syncedAt": "2026-09-24T18:46:48.706Z",
+  "syncedAt": "2026-09-26T21:12:38.487Z",
   "skills": {
     "feature-planning": {
-      "SKILL.md": "1221091934f8a7b2e40060907443472a590dc8efecc83913d6faedca9a0bb208",
+      "SKILL.md": "323d5fc5bf84f2753278ee310f7a4e9ecf71f723ac667e2b6484209cbe166728",
       "agents/openai.yaml": "8a7e9a56067476509337fe663c0126766bb90fec16811bf5141a7bbeecc4b8e8"
     },
     "tdd-slice": {
-      "SKILL.md": "81fcba694b6e2c4bd77d599a4859a6317ad2b6787e27fbbbe2d152c1061f37e2",
+      "SKILL.md": "8f30c8335c8bad7ea92630f6b290be6dcd4055b9ce37cbe0d1ff32c4eedc8d87",
       "agents/openai.yaml": "66e648de3d5a420238bd205b12ff8b94bccf4b710e2387e8b0e4aa922d009796"
     },
     "review-change": {
-      "SKILL.md": "8fa6ad4f80e60192896743e04ff020afdf50fbf5cd3ae629e4dfa6ca07c23967",
+      "SKILL.md": "7128d38bb442b042852e660f44d26e2676467803d12c5c727b1cc5d076b44493",
       "references/correctness.md": "93807e53aa5918b5d3f4e67a6d640a5c222a0d129245a34664b871e5b319683b",
       "references/accessibility.md": "ad0863e425582fbaa2eda62bc39fe9a77cd4f9ef38e73e30e8ec6f7e00e11dae",
       "references/react-composition.md": "fa24f063c710a8cfc2151d598625f832c17898e07f11c3f70c45f0279617fda1",
@@ -20,7 +20,8 @@
       "references/persistence.md": "dce458c11877c8db943a972c648819f3310f8a37131d8089d247e2e06cacee80",
       "references/error-observability.md": "1cce012db871244cc3f5ffc6f0197af3ccb2a087e23db6f9b4809c3d92972c57",
       "references/route-boundary.md": "b43386455588e20ef5e79866082755917ee5f6e15183c101660521696dfa6000",
-      "agents/openai.yaml": "cb27ea3d2564dcd97888cafb49f78bb863a9a14b455f463fa05768485a51919b"
+      "references/nextjs-boundary.md": "96fa8ab42eaf16c0bf3b7c450f95c46990b360a115eaf052a66de4dd793e3ec7",
+      "agents/openai.yaml": "a657895bed7a8bad5cddb3f60e3c0df1c6b8b7e9efacd6d9570b47d29f05a84b"
     },
     "dependency-assessment": {
       "SKILL.md": "414333f28b8d8e17071a7b3cc47824d02639d4fb33fc4496d727ecbc2a4f66b4",

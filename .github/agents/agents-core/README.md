@@ -14,6 +14,10 @@ The core pack owns reusable workflow fundamentals:
   `skills/dependency-assessment/`, `skills/commit-and-push/`, `skills/create-develop-pr/`)
 - execution-profile routing and the Delegation Gate
 - shared handoff and checkpoint templates
+- the canonical progressive slice specification and its dependency-free validator/merge tool
+- the conservative review-lens manifest and its dependency-free diff/spec classifier
+- the phase-specific instruction compiler kernel, omission checks, hashes, and golden snapshots
+- the deterministic phase-boundary execution-profile router and compact profile cache
 
 Stack packs should add stack-specific specialist agents and policy. Repo-local overlays should add project facts, exceptions, and approval boundaries.
 
@@ -41,10 +45,14 @@ per-stack reviewer / guardian aliases still resolve (to the Delivery Engineer) f
 - `routing/execution-profile-worked-examples.md`
 - `routing/execution-profile-v2-validation-report.md`
 - `routing/model-routing-policy.md`
+- `routing/deterministic-execution-profile-router.md`
 - `checklists/pr-ready-checklist.md`
 - `workflows/handoff-workflow.md`
 - `workflows/feature-workflow-routing.md`
 - `workflows/bug-workflow-routing.md`
+- `workflows/canonical-slice-spec.md`
+- `workflows/review-lens-manifest.md`
+- `workflows/phase-specific-instruction-compiler.md`
 - `standards/architecture/frontend-state-ownership-standards.md`
 - `standards/coding/coding-standards-shape.md`
 - `standards/reliability/frontend-styling-and-accessibility-standards.md`
@@ -57,6 +65,12 @@ per-stack reviewer / guardian aliases still resolve (to the Delivery Engineer) f
 - `templates/feature-request-template.md`
 - `templates/bug-report-template.md`
 - `templates/checkpoint-template.md`
+- `schemas/workflow-ledger-event.schema.json`
+- `schemas/slice-spec.schema.json`
+- `schemas/review-lens-manifest.schema.json`
+- `schemas/instruction-compiler-manifest.schema.json`
+- `schemas/execution-profile-cache.schema.json`
+- `workflows/workflow-ledger.md`
 
 ## Usage
 
@@ -65,14 +79,22 @@ per-stack reviewer / guardian aliases still resolve (to the Delivery Engineer) f
 3. Keep repo facts and exceptions in the local repo `AGENTS.md`.
 4. In repo-local overlays, map stack-defined `capability_owners` keys and `test_layer_matrix` execution to concrete package/tool choices.
 5. For frontend stacks using `capability_owners.shared_client_state_owner`, include `capability_owners.shared_client_state_tier` (`subtree` | `cross_feature`) in new/updated frontend slices.
-6. Use core handoff and checkpoint templates to keep workflows resumable and reviewable.
-7. Record each step with the core `handoff-template.md` — a compact **Step Record** in-context, a full **Cross-Context Handoff Package** only for a dispatch to a separate agent context.
-8. Keep `delivery-engineer` as default return target unless the active handoff explicitly overrides it.
-9. Keep stack-specific or repo-specific rules out of `agents-core` unless they are truly cross-stack.
-10. Persist workflow artifacts to `.agent-workflows/<workflow_id>/` and route fresh contexts by index-resolved absolute prompt paths.
-11. Delete `.agent-workflows/<workflow_id>/` after closeout to prevent artifact buildup.
-12. Select an execution profile (`routing/execution-profile-schema.md`, `routing/execution-profile-policy.md`, `routing/reasoning-selection-policy.md`) alongside the agent alias for every dispatch. `reasoning_demand` (`lightweight`, `routine`, `elevated`, `deep` — how hard the thinking is) and `delegation` (`inline`, `advisor`, `independent`, `parallel` — whether a separate agent context does the work) are chosen independently; profiles may vary between successive dispatches, and neither axis may be silently downgraded once assigned.
-13. Realize per the active platform's mapping doc (`platforms/claude-code/execution-profile-mapping.md` or `platforms/codex/execution-profile-mapping.md`, installed as siblings of this pack): `reasoning_demand` is advisory model/effort at every level and never by itself forces a separate context; `delegation: inline` runs in the primary context, and `advisor`/`independent`/`parallel` are dispatched through the `Agent` tool with each subagent's model set from its own `reasoning_demand`. This pack stays platform-neutral and never names a concrete model.
+6. Create `.agent-workflows/<workflow_id>/slice-spec.json` at intake and progressively populate it;
+   handoffs, ledger events, and checkpoints reference its path/revision/hash instead of restating it.
+7. Generate `.agent-workflows/<workflow_id>/review-lens-manifest.json` from the completed diff and
+   slice spec before review; load only its selected references.
+8. During Slice 4 shadow mode, use `scripts/instruction-compiler.mjs` to compile and compare
+   effective-policy goldens; do not replace the legacy chain until equivalence and reduction gates pass.
+9. Resolve execution profiles at phase boundaries with `scripts/execution-profile-router.mjs` and
+   persist the compact ID in normal-path records.
+10. Use core handoff and checkpoint templates to keep workflows resumable and reviewable.
+11. Record each step with the core `handoff-template.md` — a compact **Step Record** in-context, a full **Cross-Context Handoff Package** only for a dispatch to a separate agent context.
+12. Keep `delivery-engineer` as default return target unless the active handoff explicitly overrides it.
+13. Keep stack-specific or repo-specific rules out of `agents-core` unless they are truly cross-stack.
+14. Persist workflow artifacts to `.agent-workflows/<workflow_id>/` and route fresh contexts by index-resolved absolute prompt paths.
+15. Delete `.agent-workflows/<workflow_id>/` after closeout to prevent artifact buildup.
+16. Select an execution profile (`routing/execution-profile-schema.md`, `routing/execution-profile-policy.md`, `routing/reasoning-selection-policy.md`) alongside the agent alias for every dispatch. `reasoning_demand` (`lightweight`, `routine`, `elevated`, `deep` — how hard the thinking is) and `delegation` (`inline`, `advisor`, `independent`, `parallel` — whether a separate agent context does the work) are chosen independently; profiles may vary between successive dispatches, and neither axis may be silently downgraded once assigned.
+17. Realize per the active platform's mapping doc (`platforms/claude-code/execution-profile-mapping.md` or `platforms/codex/execution-profile-mapping.md`, installed as siblings of this pack): `reasoning_demand` is advisory model/effort at every level and never by itself forces a separate context; `delegation: inline` runs in the primary context, and `advisor`/`independent`/`parallel` are dispatched through the `Agent` tool with each subagent's model set from its own `reasoning_demand`. This pack stays platform-neutral and never names a concrete model.
 
 ## Adoption notes
 
@@ -86,6 +108,18 @@ Copy these files together:
 - `agent-docs/workflows/feature-workflow-routing.md`
 - `agent-docs/workflows/bug-workflow-routing.md`
 - `agent-docs/workflows/handoff-workflow.md`
+- `agent-docs/workflows/canonical-slice-spec.md`
+- `agent-docs/schemas/slice-spec.schema.json`
+- `scripts/slice-spec.mjs`
+- `agent-docs/workflows/review-lens-manifest.md`
+- `agent-docs/schemas/review-lens-manifest.schema.json`
+- `scripts/review-lens-manifest.mjs`
+- `agent-docs/workflows/phase-specific-instruction-compiler.md`
+- `agent-docs/schemas/instruction-compiler-manifest.schema.json`
+- `scripts/instruction-compiler.mjs`
+- `agent-docs/routing/deterministic-execution-profile-router.md`
+- `agent-docs/schemas/execution-profile-cache.schema.json`
+- `scripts/execution-profile-router.mjs`
 - `agent-docs/templates/handoff-template.md`
 - `agent-docs/templates/bug-report-template.md`
 - `agents/delivery-engineer.agent.md`

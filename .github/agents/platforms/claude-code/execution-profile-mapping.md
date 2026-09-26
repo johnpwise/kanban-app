@@ -26,7 +26,7 @@ Claude Code realizes the reasoning axis with two independent controls:
 | Axis | Values | Native control |
 | --- | --- | --- |
 | Model tier | `light` \| `standard` \| `deep` | The active model, or the `model` parameter on an `Agent`-tool dispatch. |
-| Thinking budget | `minimal` \| `standard` \| `extended` \| `maximum` | The session's extended-thinking / effort setting (for example the `/fast` toggle, an effort control, or the default for a dispatched subagent). |
+| Thinking budget | `low` \| `medium` \| `high` \| `max` | The session or subagent `effort` setting when the selected model supports it. |
 
 Each `reasoning_demand` level carries a default pairing of the two. A dispatch that needs a
 non-default pairing records that in its `rationale`; there is no extra metadata field.
@@ -37,7 +37,7 @@ non-default pairing records that in its `rationale`; there is no extra metadata 
 | --- | --- | --- |
 | `light` (Fastest) | Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) | `lightweight` dispatches: mechanical, deterministic, high-volume work. |
 | `standard` (Default capable) | Claude Sonnet 5 (`claude-sonnet-5`) | `routine` dispatches: normal bounded engineering. |
-| `deep` (Highest capability) | Claude Opus 4.8 (`claude-opus-4-8`) | `elevated` and `deep` dispatches: non-trivial to hardest reasoning. |
+| `deep` (Highest capability) | Claude Opus 5 (`claude-opus-5`) | `elevated` and `deep` dispatches: non-trivial to hardest reasoning. |
 | Narrative/creative variant | Claude Fable 5 (`claude-fable-5`) | Available as an `Agent`-tool `model` override for narrative/creative-leaning specialist work; not part of the default tier ladder. |
 
 Model identifiers are the current lineup as of this writing and are expected to change; treat the
@@ -46,14 +46,18 @@ identifier against the active Claude Code environment at dispatch time.
 
 ## Execution Profile Mapping Table
 
-| Shared `reasoning_demand` | Model tier | Thinking budget | Realization |
-| --- | --- | --- | --- |
-| `lightweight` | `light` | `minimal` | **Advisory.** Applied if the host exposes a model/effort control, otherwise the gap is recorded in `rationale`. |
-| `routine` | `standard` | `standard` | **Advisory.** As above. This is the default. |
-| `elevated` | `deep` | `extended` | **Advisory.** As above. Does not by itself require a separate context. |
-| `deep` | `deep` | `maximum` | **Advisory.** As above. The hardest reasoning tier; still runs in the current context unless `delegation` says otherwise. |
+| Shared `reasoning_demand` | Model tier | Claude model | `effort` | Realization |
+| --- | --- | --- | --- | --- |
+| `lightweight` | `light` | `claude-haiku-4-5-20251001` | unavailable | **Advisory.** Haiku 4.5 supplies the fast tier; its missing effort control is a known mapping exception. |
+| `routine` | `standard` | `claude-sonnet-5` | `medium` | **Advisory.** Applied if the host exposes the control. This is the default. |
+| `elevated` | `deep` | `claude-opus-5` | `high` | **Advisory.** As above. Does not by itself require a separate context. |
+| `deep` | `deep` | `claude-opus-5` | `max` | **Advisory.** As above. The hardest reasoning tier; still runs in the current context unless `delegation` says otherwise. |
 
-This table provides complete coverage for every shared `reasoning_demand` level. `reasoning_demand`
+This table provides complete deterministic coverage for every shared `reasoning_demand` level and
+follows Anthropic's current model/effort documentation at
+https://docs.anthropic.com/en/docs/about-claude/model-deprecations and
+https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/prompt-templates-and-variables.
+`reasoning_demand`
 is advisory at every level: where the host does not expose manual model/effort selection, record the
 gap in `rationale` and proceed — the semantic level is still selected, recorded, and escalated
 normally.

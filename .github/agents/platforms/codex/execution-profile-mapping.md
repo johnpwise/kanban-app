@@ -24,32 +24,32 @@ applies (see `platforms/claude-code/execution-profile-mapping.md` for the other)
 | Axis | Values | Native control |
 | --- | --- | --- |
 | Model tier | `light` \| `standard` \| `deep` | The coding model selected for the dispatch or agent role. |
-| Reasoning effort | Codex effort level (`Light` \| `Medium` \| `High` \| `Extra High` \| `Ultra`) | The `reasoning_effort` (or equivalent) setting on the active Codex configuration. |
+| Reasoning effort | `low` \| `medium` \| `high` \| `xhigh` \| `max` | The `reasoning_effort` (or equivalent) setting on the active Codex configuration. |
 
-Codex exposes five native effort levels; the shared vocabulary has four demand levels, so `elevated`
-and `deep` map to effort *ranges* and the Best-Available Fallback rule picks within the range against
-what the active configuration exposes.
+The exact pairs below are the deterministic routing contract. They follow the current GPT-6 model
+and effort surface documented at https://developers.openai.com/api/docs/guides/latest-model and
+must be updated here when that platform surface changes.
 
 ## Model Classes (Capability-Based)
 
-| Model tier | Typical use | Configuration note |
+| Model tier | Current model identifier | Typical use |
 | --- | --- | --- |
-| `light` (Smallest/fastest) | `lightweight` dispatches: mechanical, deterministic, high-volume work. | Resolve to the smallest coding-capable model available (for example a "-mini" or equivalent tier). |
-| `standard` (Standard coding) | `routine` dispatches: normal bounded engineering. | Resolve to the default coding model configured for the active Codex environment. |
-| `deep` (Extended reasoning) | `elevated` and `deep` dispatches: non-trivial to hardest reasoning. | Resolve to the highest reasoning-effort coding model/configuration available. |
+| `light` (Smallest/fastest) | `gpt-6-luna` | `lightweight` dispatches: mechanical, deterministic, high-volume work. |
+| `standard` (Standard coding) | `gpt-6-sol` | `routine` and `elevated` coding/agentic work. |
+| `deep` (Highest capability) | `gpt-6-astra` | The hardest `deep` reasoning work. |
 
-Exact model identifiers and reasoning-effort parameter names are configuration- and
-version-dependent; treat the model tier (`light` / `standard` / `deep`) as the stable contract and
-re-resolve against the active Codex configuration at dispatch time.
+These identifiers are a dated platform snapshot, while the semantic demand values and compact
+profile IDs remain stable. Update this platform-owned file and its validator together when the
+available Codex lineup changes.
 
 ## Execution Profile Mapping Table
 
-| Shared `reasoning_demand` | Model tier | Codex effort | Realization |
-| --- | --- | --- | --- |
-| `lightweight` | `light` | `Light` | **Advisory.** Applied if the host exposes a control, otherwise the gap is recorded in `rationale`. |
-| `routine` | `standard` | `Medium` | **Advisory.** As above. This is the default. |
-| `elevated` | `deep` | `High`–`Extra High` | **Advisory.** As above. Does not by itself require a separate context. |
-| `deep` | `deep` | `Extra High`–`Ultra` | **Advisory.** As above. The hardest reasoning tier; still runs in the current context unless `delegation` says otherwise. |
+| Shared `reasoning_demand` | Model tier | Codex model | `reasoning_effort` | Realization |
+| --- | --- | --- | --- | --- |
+| `lightweight` | `light` | `gpt-6-luna` | `low` | **Advisory.** Applied if the host exposes a control, otherwise the gap is recorded as an exception. |
+| `routine` | `standard` | `gpt-6-sol` | `medium` | **Advisory.** As above. This is the default. |
+| `elevated` | `standard` | `gpt-6-sol` | `high` | **Advisory.** As above. Does not by itself require a separate context. |
+| `deep` | `deep` | `gpt-6-astra` | `max` | **Advisory.** As above. The hardest reasoning tier; still runs in the current context unless `delegation` says otherwise. |
 
 This table provides complete coverage for every shared `reasoning_demand` level. `reasoning_demand`
 is advisory at every level: where the host does not expose manual model/effort selection, record the
@@ -88,8 +88,7 @@ When a dispatch resolves to `delegation: parallel`:
 
 When the exact model tier or reasoning-effort setting for an assigned `reasoning_demand` is
 unavailable in the active Codex environment:
-1. Substitute the nearest available setting, preferring an equal-or-stronger one. For `elevated` and
-   `deep`, this is the rule that picks within the mapped effort range.
+1. Substitute the nearest available setting, preferring an equal-or-stronger one.
 2. If only a weaker option is available, continue at the best available level rather than blocking.
 3. Record the substitution and its reason in the dispatch's `rationale`, and add deterministic
    verification where the reduced effort warrants it.

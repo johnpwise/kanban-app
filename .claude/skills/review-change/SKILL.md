@@ -1,6 +1,6 @@
 ---
 name: review-change
-description: Review a completed diff through diff-classified lenses — correctness always, plus accessibility, composition, state ownership, API contracts, persistence, error/observability, and route boundary only when the diff touches that concern. Use inline as the review step of a delivery slice, before commit. Replaces the retired per-stack reviewer and guardian agents.
+description: Review a completed diff through a conservative diff/spec-classified manifest — correctness always, with conditional lenses selected before commit and uncertain classifications included. Use inline as the review step of a delivery slice. Replaces the retired per-stack reviewer and guardian agents.
 ---
 
 # Review Change
@@ -13,17 +13,27 @@ shared-state path where an isolated second opinion on the finished diff material
 
 ## How to run it
 
-1. **Classify the diff.** Decide which concerns it actually touches. Record the classification and,
-   for every lens you skip, a one-line reason.
-2. **Run the correctness lens always** — `references/correctness.md` for the stack you are in
+Classify the diff through the generated manifest. Its lens entries provide, for every lens you skip, a one-line reason
+as a stable machine code.
+
+1. **Generate the conservative manifest.** Run the installed
+   `agents-core/scripts/review-lens-manifest.mjs` against the completed diff and canonical slice
+   spec. Its deterministic selections are a floor: uncertain classification includes the lens,
+   and you may add a lens with a rationale but never remove one. Every skipped lens retains its
+   machine reason code.
+2. **Load only `loadReferences`.** This is correctness plus the diff/spec-triggered or model-added
+   reference files. Resolve each `references/*.md` path relative to this `SKILL.md`; do not preload
+   skipped lens references.
+3. **Run the correctness lens always** — `references/correctness.md` for the stack you are in
    (frontend or backend framing). It is never skipped, however small the change.
-3. **Run each conditional lens whose trigger the diff hits** (table below). Each lens has a
+4. **Run each included conditional lens** (table below). Each lens has a
    reference file with what to check and what to flag.
-4. **Fold findings into the Step Record**, split into blocking (`changes-required`) and
+5. **Fold findings into the Step Record**, split into blocking (`changes-required`) and
    non-blocking (follow-up). A blocking finding routes scoped rework inline via `tdd-slice`, then
-   the lenses the rework touched re-run. Never wave a blocking finding through; never let rework
-   skip the lens that found the problem.
-5. The closeout Step Record lists which lenses ran and why each skipped one was skipped
+   regenerate the manifest and rerun the lenses the rework touched. Never wave a blocking finding
+   through; never let rework skip the lens that found the problem.
+6. The closeout Step Record links the manifest path/hash, lists which lenses ran, and retains the
+   machine reason code for each skipped lens
    (Artifact budget: independent review 600 words; an inline review is smaller).
 
 ## Lens triggers

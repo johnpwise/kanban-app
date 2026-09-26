@@ -48,9 +48,9 @@ Workflow defaults:
 - Default `Return To Agent` is `delivery-engineer.agent.md` unless explicitly overridden by an incoming handoff.
 - One primary context owns the slice; control returns to the workflow-owner role only for `blocked`, `awaiting-approval`, or `ready-for-closeout`.
 - Complexity is classified `trivial` vs `non-trivial` and the delivery is sequenced into TDD increments — inline, not a separate agent.
-- The `skills/review-change/` correctness lens is required before closeout when frontend code changes; the accessibility, composition, state-ownership, and nextjs-boundary lenses are diff-classified.
+- A valid `review-lens-manifest.json` is required before closeout; correctness is always included, uncertainty includes, and model judgment may add but never remove.
 - API contract modelling is a plan-time use of the `skills/review-change/` api-contracts lens.
-- A blocking review-lens finding routes scoped rework inline, then the applicable lenses re-run.
+- A blocking review-lens finding routes scoped rework inline, then the manifest is regenerated before reruns.
 - Persist workflow artifacts in `.agent-workflows/<workflow_id>/` and delete that folder after workflow status is `closed`.
 
 ## Workflow Prompts

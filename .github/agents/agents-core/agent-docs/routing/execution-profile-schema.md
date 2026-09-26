@@ -21,7 +21,12 @@ fresh context would lose what the primary agent has already learned. See
 
 ## Execution Profile Metadata Block
 
-Every dispatch and handoff must carry one Execution Profile Metadata block with these fields:
+The router resolves these fields once per phase boundary and stores them under a compact
+content-addressed profile ID (`ep-<12 hex>`) in `execution-profile-cache.json`. Normal-path step
+records and ledger events carry that ID. Cross-context handoffs expand the complete block from the
+cache. Legacy artifacts may still carry the complete block inline.
+
+The expanded Execution Profile Metadata shape is:
 
 | Field | Required | Allowed values | Meaning |
 | --- | --- | --- | --- |
@@ -33,9 +38,13 @@ Every dispatch and handoff must carry one Execution Profile Metadata block with 
 | `scope` | Yes | `local` \| `module` \| `cross-module` \| `system-wide` | breadth of code/system affected |
 | `reversibility` | Yes | `easily-reversible` \| `reversible-with-effort` \| `hard-to-reverse` | cost of undoing this dispatch's output if wrong |
 | `verification` | Yes | `deterministic-check` \| `test-backed` \| `review-backed` \| `multi-specialist-verification` | how correctness will be established |
-| `rationale` | Yes | one-line free text | why this profile / demand / delegation was selected |
+| `rationale` | Conditional for router-managed profiles | one-line free text | escalation, exception, acknowledged downgrade, or non-inline delegation reason; legacy expanded blocks require it |
 | `escalated_from` | Only when escalated | a prior `execution_profile` name | the profile this dispatch was escalated from |
 | `escalation_reason` | Only when escalated | one-line free text | the newly discovered complexity or risk that justified escalation |
+
+For router-managed profiles, `rationale` is required only for escalation, exception, acknowledged
+downgrade, or non-inline delegation. Deterministic routine inline selection uses the cached
+structured evidence instead of repeating free-form rationale in every artifact.
 
 `risk`, `scope`, `reversibility`, and `verification` are **judgement inputs** recorded for
 transparency and audit. They inform, but do not mechanically determine, `reasoning_demand` or
