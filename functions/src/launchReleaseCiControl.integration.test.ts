@@ -54,60 +54,113 @@ describeWithEmulator("launchReleaseCiControl (Firestore emulator)", () => {
     await deleteApp(app);
   });
 
-  it("launches exactly once for a real pullRequests.main-recorded transition", async () => {
+  it("does not launch for a real pullRequests.main-only update, then launches exactly once when develop completes the pair", async () => {
+    const releaseIntentId = `intent-${randomUUID()}`;
+    const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+    await docRef.set(releaseIntentData(releaseIntentId));
+    const beforeMainSnapshot = await docRef.get();
+
+    await docRef.update({ pullRequests: { main: pullRequestResult() } });
+    const afterMainSnapshot = await docRef.get();
+
+    const launchJobForMain: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-1a" });
+    await launchReleaseCiControl({
+      documentId: afterMainSnapshot.id,
+      before: beforeMainSnapshot.data(),
+      after: afterMainSnapshot.data(),
+      eventId: "integration-event-1a",
+      launchJob: launchJobForMain,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+    expect(launchJobForMain).not.toHaveBeenCalled();
+
+    await docRef.update({ "pullRequests.develop": pullRequestResult({ baseBranch: "develop" }) });
+    const afterPairSnapshot = await docRef.get();
+
+    const launchJobForPair: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-1b" });
+    await launchReleaseCiControl({
+      documentId: afterPairSnapshot.id,
+      before: afterMainSnapshot.data(),
+      after: afterPairSnapshot.data(),
+      eventId: "integration-event-1b",
+      launchJob: launchJobForPair,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+
+    expect(launchJobForPair).toHaveBeenCalledTimes(1);
+    expect(launchJobForPair).toHaveBeenCalledWith({ releaseIntentId });
+  });
+
+  it("does not launch for a real pullRequests.develop-only update, then launches exactly once when main completes the pair", async () => {
+    const releaseIntentId = `intent-${randomUUID()}`;
+    const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+    await docRef.set(releaseIntentData(releaseIntentId));
+    const beforeDevelopSnapshot = await docRef.get();
+
+    await docRef.update({ pullRequests: { develop: pullRequestResult({ baseBranch: "develop" }) } });
+    const afterDevelopSnapshot = await docRef.get();
+
+    const launchJobForDevelop: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-2a" });
+    await launchReleaseCiControl({
+      documentId: afterDevelopSnapshot.id,
+      before: beforeDevelopSnapshot.data(),
+      after: afterDevelopSnapshot.data(),
+      eventId: "integration-event-2a",
+      launchJob: launchJobForDevelop,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+    expect(launchJobForDevelop).not.toHaveBeenCalled();
+
+    await docRef.update({ "pullRequests.main": pullRequestResult() });
+    const afterPairSnapshot = await docRef.get();
+
+    const launchJobForPair: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-2b" });
+    await launchReleaseCiControl({
+      documentId: afterPairSnapshot.id,
+      before: afterDevelopSnapshot.data(),
+      after: afterPairSnapshot.data(),
+      eventId: "integration-event-2b",
+      launchJob: launchJobForPair,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
+
+    expect(launchJobForPair).toHaveBeenCalledTimes(1);
+    expect(launchJobForPair).toHaveBeenCalledWith({ releaseIntentId });
+  });
+
+  it("launches exactly once for a real update that records both PR identities together", async () => {
     const releaseIntentId = `intent-${randomUUID()}`;
     const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
     await docRef.set(releaseIntentData(releaseIntentId));
     const beforeSnapshot = await docRef.get();
 
-    await docRef.update({ pullRequests: { main: pullRequestResult() } });
+    await docRef.update({
+      pullRequests: { main: pullRequestResult(), develop: pullRequestResult({ baseBranch: "develop" }) },
+    });
     const afterSnapshot = await docRef.get();
 
-    const launchJob: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-1" });
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-
+    const launchJob: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-3" });
     await launchReleaseCiControl({
       documentId: afterSnapshot.id,
       before: beforeSnapshot.data(),
       after: afterSnapshot.data(),
-      eventId: "integration-event-1",
+      eventId: "integration-event-3",
       launchJob,
-      logger,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     });
 
     expect(launchJob).toHaveBeenCalledTimes(1);
     expect(launchJob).toHaveBeenCalledWith({ releaseIntentId });
   });
 
-  it("launches a second time for a real pullRequests.develop-recorded transition on an already-main-recorded intent", async () => {
+  it("does not launch again for a real ci-persistence update on an already-complete pair", async () => {
     const releaseIntentId = `intent-${randomUUID()}`;
     const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
-    await docRef.set(releaseIntentData(releaseIntentId, { pullRequests: { main: pullRequestResult() } }));
-    const beforeSnapshot = await docRef.get();
-
-    await docRef.update({ "pullRequests.develop": pullRequestResult({ baseBranch: "develop" }) });
-    const afterSnapshot = await docRef.get();
-
-    const launchJob: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-2" });
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-
-    await launchReleaseCiControl({
-      documentId: afterSnapshot.id,
-      before: beforeSnapshot.data(),
-      after: afterSnapshot.data(),
-      eventId: "integration-event-2",
-      launchJob,
-      logger,
-    });
-
-    expect(launchJob).toHaveBeenCalledTimes(1);
-    expect(launchJob).toHaveBeenCalledWith({ releaseIntentId });
-  });
-
-  it("does not launch a second time for a real ci-persistence update on an already-recorded target", async () => {
-    const releaseIntentId = `intent-${randomUUID()}`;
-    const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
-    await docRef.set(releaseIntentData(releaseIntentId, { pullRequests: { main: pullRequestResult() } }));
+    await docRef.set(
+      releaseIntentData(releaseIntentId, {
+        pullRequests: { main: pullRequestResult(), develop: pullRequestResult({ baseBranch: "develop" }) },
+      }),
+    );
     const beforeSnapshot = await docRef.get();
 
     // Simulate the release-ci-controller's own durable persistence of a verified CI result.
@@ -123,16 +176,14 @@ describeWithEmulator("launchReleaseCiControl (Firestore emulator)", () => {
     });
     const afterSnapshot = await docRef.get();
 
-    const launchJob: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-3" });
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-
+    const launchJob: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-4" });
     await launchReleaseCiControl({
       documentId: afterSnapshot.id,
       before: beforeSnapshot.data(),
       after: afterSnapshot.data(),
-      eventId: "integration-event-3",
+      eventId: "integration-event-4",
       launchJob,
-      logger,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     });
 
     expect(launchJob).not.toHaveBeenCalled();
@@ -147,16 +198,14 @@ describeWithEmulator("launchReleaseCiControl (Firestore emulator)", () => {
     await docRef.update({ requestedAt: Timestamp.now() });
     const afterSnapshot = await docRef.get();
 
-    const launchJob: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-4" });
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-
+    const launchJob: LaunchAdaReleaseCiControllerJob = vi.fn().mockResolvedValue({ operationName: "op-integration-5" });
     await launchReleaseCiControl({
       documentId: afterSnapshot.id,
       before: beforeSnapshot.data(),
       after: afterSnapshot.data(),
-      eventId: "integration-event-4",
+      eventId: "integration-event-5",
       launchJob,
-      logger,
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     });
 
     expect(launchJob).not.toHaveBeenCalled();
