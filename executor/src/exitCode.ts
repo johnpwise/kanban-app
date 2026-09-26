@@ -1,6 +1,7 @@
 import type { DeliveryCiControllerOutcome } from "./deliveryCiController";
 import type { MergeCompletionRetryOutcome } from "./mergeCompletionRetryController";
 import type { EnsureReleaseIntentRecordedOutcome } from "./releaseIntentResolution";
+import type { ReleaseCiControllerOutcome, ReleaseCiTargetOutcome } from "./releaseCiController";
 import type { ReleasePullRequestCompletionControllerOutcome } from "./releasePullRequestCompletionController";
 import type { ReleaseStartCompletionControllerOutcome } from "./releaseStartCompletionController";
 import type { ExecutorOutcome } from "./runExecutor";
@@ -76,5 +77,29 @@ export function exitCodeForReleaseControllerOutcome(outcome: ReleaseControllerOu
 export function exitCodeForReleasePullRequestControllerOutcome(outcome: ReleasePullRequestCompletionControllerOutcome): number {
   const isTargetDurable = (target: ReleasePullRequestCompletionControllerOutcome["main"]) =>
     target.outcome === "release_pull_request_recorded" || target.outcome === "release_pull_request_already_recorded";
+  return isTargetDurable(outcome.main) && isTargetDurable(outcome.develop) ? 0 : 1;
+}
+
+/**
+ * Pure outcome -> process-exit-code mapping for `releaseCiControllerMain.ts`, kept here for the
+ * same reason as the other `exitCodeFor*` functions. Success (`0`) requires **both** trusted
+ * targets (`main`, `develop`) to have reached durably persisted trusted terminal CI evidence —
+ * each either a freshly completed or idempotently converged `release_ci_succeeded_*` /
+ * `release_ci_failed_*`. A genuine CI *failure* that was correctly observed and durably persisted
+ * is still success here, mirroring `exitCodeForCiControllerOutcome`'s `ci_failed -> 0` precedent:
+ * the controller's job was to reach and record a trusted terminal result, not to require that
+ * result be a success. This says nothing about release-progression eligibility — a later,
+ * out-of-scope stage must inspect each target's persisted `state` before ever merging/promoting.
+ * Any other per-target outcome for either target — `ci_unbound`, a reconciliation/observation
+ * failure, a persistence/lifecycle-conflict failure, or the bounded `release_ci_exhausted` — means
+ * that target never reached a durable terminal result, and the whole controller run maps to `1`,
+ * even if the other target succeeded.
+ */
+export function exitCodeForReleaseCiControllerOutcome(outcome: ReleaseCiControllerOutcome): number {
+  const isTargetDurable = (target: ReleaseCiTargetOutcome) =>
+    target.outcome === "release_ci_succeeded_recorded" ||
+    target.outcome === "release_ci_succeeded_already_recorded" ||
+    target.outcome === "release_ci_failed_recorded" ||
+    target.outcome === "release_ci_failed_already_recorded";
   return isTargetDurable(outcome.main) && isTargetDurable(outcome.develop) ? 0 : 1;
 }

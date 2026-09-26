@@ -1,7 +1,9 @@
 import type {
+  RecordReleaseCiResultOutcome,
   RecordReleaseIntentOutcome,
   RecordReleasePullRequestResultOutcome,
   RecordReleaseStartResultOutcome,
+  ReleaseCiResultIdentity,
   ReleaseIntentIdentity,
   ReleaseIntentRepository,
   ReleasePullRequestResultIdentity,
@@ -27,6 +29,11 @@ export interface FakeRecordReleasePullRequestResultCall {
   identity: ReleasePullRequestResultIdentity;
 }
 
+export interface FakeRecordReleaseCiResultCall {
+  releaseIntentId: string;
+  identity: ReleaseCiResultIdentity;
+}
+
 export function createFakeReleaseIntentRepository(behavior: {
   data?: unknown;
   throwError?: Error;
@@ -36,22 +43,27 @@ export function createFakeReleaseIntentRepository(behavior: {
   recordReleaseStartResultThrowError?: Error;
   recordReleasePullRequestResult?: RecordReleasePullRequestResultOutcome;
   recordReleasePullRequestResultThrowError?: Error;
+  recordReleaseCiResult?: RecordReleaseCiResultOutcome;
+  recordReleaseCiResultThrowError?: Error;
 }): {
   repository: ReleaseIntentRepository;
   calls: FakeReleaseIntentRepositoryCall[];
   recordReleaseIntentCalls: FakeRecordReleaseIntentCall[];
   recordReleaseStartResultCalls: FakeRecordReleaseStartResultCall[];
   recordReleasePullRequestResultCalls: FakeRecordReleasePullRequestResultCall[];
+  recordReleaseCiResultCalls: FakeRecordReleaseCiResultCall[];
 } {
   const calls: FakeReleaseIntentRepositoryCall[] = [];
   const recordReleaseIntentCalls: FakeRecordReleaseIntentCall[] = [];
   const recordReleaseStartResultCalls: FakeRecordReleaseStartResultCall[] = [];
   const recordReleasePullRequestResultCalls: FakeRecordReleasePullRequestResultCall[] = [];
+  const recordReleaseCiResultCalls: FakeRecordReleaseCiResultCall[] = [];
   return {
     calls,
     recordReleaseIntentCalls,
     recordReleaseStartResultCalls,
     recordReleasePullRequestResultCalls,
+    recordReleaseCiResultCalls,
     repository: {
       async loadReleaseIntentData(releaseIntentId: string) {
         calls.push({ releaseIntentId });
@@ -80,6 +92,13 @@ export function createFakeReleaseIntentRepository(behavior: {
           throw behavior.recordReleasePullRequestResultThrowError;
         }
         return behavior.recordReleasePullRequestResult ?? { outcome: "created" };
+      },
+      async recordReleaseCiResult(releaseIntentId: string, identity: ReleaseCiResultIdentity) {
+        recordReleaseCiResultCalls.push({ releaseIntentId, identity });
+        if (behavior.recordReleaseCiResultThrowError) {
+          throw behavior.recordReleaseCiResultThrowError;
+        }
+        return behavior.recordReleaseCiResult ?? { outcome: "created" };
       },
     },
   };
