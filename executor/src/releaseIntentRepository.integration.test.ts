@@ -836,4 +836,296 @@ describeWithEmulator("createFirestoreReleaseIntentRepository() against the Fires
       expect(data?.ci?.main?.runId).toBe(501);
     });
   });
+
+  describe("recordReleaseMergeResult()", () => {
+    const releaseBranch = (version: string) => `release/${version}`;
+    const startCommitSha = "2".repeat(40);
+    const mainPrNumber = 301;
+    const developPrNumber = 302;
+
+    async function seedReleaseIntentWithPullRequests(): Promise<{ releaseIntentId: string; version: string }> {
+      const version = uniqueVersion();
+      const releaseIntentId = `johnpwise__kanban-app--${version}`;
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseIntent(releaseIntentId, { repository: repositoryField, version, sourceBranch, sourceRevision });
+      await repository.recordReleaseStartResult(releaseIntentId, {
+        repository: repositoryField,
+        version,
+        sourceBranch,
+        sourceRevision,
+        releaseBranch: releaseBranch(version),
+        commitSha: startCommitSha,
+      });
+      await repository.recordReleasePullRequestResult(releaseIntentId, {
+        repository: repositoryField,
+        version,
+        sourceBranch,
+        sourceRevision,
+        releaseBranch: releaseBranch(version),
+        commitSha: startCommitSha,
+        target: "main",
+        number: mainPrNumber,
+      });
+      await repository.recordReleasePullRequestResult(releaseIntentId, {
+        repository: repositoryField,
+        version,
+        sourceBranch,
+        sourceRevision,
+        releaseBranch: releaseBranch(version),
+        commitSha: startCommitSha,
+        target: "develop",
+        number: developPrNumber,
+      });
+      return { releaseIntentId, version };
+    }
+
+    function mainMergeIdentity(overrides: Partial<{ number: number; headSha: string; mergeCommitSha: string }> = {}) {
+      return {
+        target: "main" as const,
+        number: mainPrNumber,
+        headSha: startCommitSha,
+        mergeCommitSha: "3".repeat(40),
+        ...overrides,
+      };
+    }
+
+    it("records the first trusted merge result for a target against an already-recorded pull request", async () => {
+      // Arrange
+      const { releaseIntentId, version } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity());
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.merges?.main?.number).toBe(mainPrNumber);
+      expect(data?.merges?.main?.baseBranch).toBe("main");
+      expect(data?.merges?.main?.headBranch).toBe(releaseBranch(version));
+      expect(data?.merges?.main?.headSha).toBe(startCommitSha);
+      expect(data?.merges?.main?.mergeCommitSha).toBe("3".repeat(40));
+      expect(data?.merges?.main?.recordedAt).toBeInstanceOf(Timestamp);
+      expect(data?.merges?.develop).toBeUndefined();
+    });
+
+    it("records the develop target independently of the main target", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity());
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(releaseIntentId, {
+        target: "develop",
+        number: developPrNumber,
+        headSha: startCommitSha,
+        mergeCommitSha: "4".repeat(40),
+      });
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "created" });
+      const data = (await docRef.get()).data();
+      expect(data?.merges?.main?.mergeCommitSha).toBe("3".repeat(40));
+      expect(data?.merges?.develop?.mergeCommitSha).toBe("4".repeat(40));
+      expect(data?.merges?.develop?.baseBranch).toBe("develop");
+    });
+
+    it("idempotently accepts recording the exact same trusted merge result that is already persisted (crash recovery convergence)", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      const identity = mainMergeIdentity();
+      await repository.recordReleaseMergeResult(releaseIntentId, identity);
+      const firstRecordedAt = (await docRef.get()).data()?.merges?.main?.recordedAt;
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(releaseIntentId, identity);
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "already_recorded" });
+      const data = (await docRef.get()).data();
+      expect(data?.merges?.main?.recordedAt).toEqual(firstRecordedAt);
+    });
+
+    it("refuses to overwrite an already-recorded merge result with a different merge commit SHA (never replaces established merge commit identity)", async () => {
+      // Arrange — same PR/head, different mergeCommitSha.
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity());
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity({ mergeCommitSha: "9".repeat(40) }));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.merges?.main?.mergeCommitSha).toBe("3".repeat(40));
+    });
+
+    it("refuses to overwrite already-recorded merge evidence that disagrees on PR number (never adopts corrupted evidence)", async () => {
+      // Arrange — directly corrupt the already-recorded evidence's `number` to simulate a
+      // contradictory persisted document; a legitimate replay against the real persisted PR must
+      // never silently adopt the corrupted PR number as agreement.
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity());
+      await docRef.update({ "merges.main.number": 999999 });
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity());
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.merges?.main?.number).toBe(999999);
+    });
+
+    it("refuses to overwrite already-recorded merge evidence that disagrees on head SHA (never adopts corrupted evidence)", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity());
+      await docRef.update({ "merges.main.headSha": "8".repeat(40) });
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity());
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "conflict" });
+      const data = (await docRef.get()).data();
+      expect(data?.merges?.main?.headSha).toBe("8".repeat(40));
+    });
+
+    it("fails closed with release_pull_request_identity_mismatch when the supplied PR number disagrees with the currently persisted prerequisite PR", async () => {
+      // Arrange — no merge evidence exists yet; the disagreement is against `pullRequests.main` itself.
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity({ number: 999999 }));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_pull_request_identity_mismatch" });
+      const data = (await firestore.collection("releaseIntents").doc(releaseIntentId).get()).data();
+      expect(data?.merges).toBeUndefined();
+    });
+
+    it("fails closed with release_pull_request_identity_mismatch when the supplied head SHA disagrees with the currently persisted prerequisite PR (execution result obtained under stale identity)", async () => {
+      // Arrange — simulates the crash-race case: a trusted merge execution/eligibility result was
+      // computed against a head SHA that no longer agrees with the durably persisted release PR.
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity({ headSha: "7".repeat(40) }));
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_pull_request_identity_mismatch" });
+      const data = (await firestore.collection("releaseIntents").doc(releaseIntentId).get()).data();
+      expect(data?.merges).toBeUndefined();
+    });
+
+    it("fails closed with release_intent_not_found when no such release intent exists", async () => {
+      // Arrange
+      const repository = createFirestoreReleaseIntentRepository();
+      const missingId = `johnpwise__kanban-app--9.9.9-${randomUUID()}`;
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(missingId, mainMergeIdentity());
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_intent_not_found" });
+    });
+
+    it("fails closed with release_intent_invalid when the persisted document fails schema validation", async () => {
+      // Arrange
+      const version = uniqueVersion();
+      const releaseIntentId = `johnpwise__kanban-app--${version}`;
+      await firestore.collection("releaseIntents").doc(releaseIntentId).set({
+        releaseIntentId,
+        repository: repositoryField,
+        version: "v-not-a-version",
+        sourceBranch,
+        sourceRevision,
+        requestedAt: Timestamp.now(),
+      });
+      const repository = createFirestoreReleaseIntentRepository();
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity());
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_intent_invalid" });
+    });
+
+    it("fails closed with release_pull_request_missing when no pull request result is persisted yet for this target", async () => {
+      // Arrange
+      const version = uniqueVersion();
+      const releaseIntentId = `johnpwise__kanban-app--${version}`;
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseIntent(releaseIntentId, { repository: repositoryField, version, sourceBranch, sourceRevision });
+
+      // Act
+      const outcome = await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity());
+
+      // Assert
+      expect(outcome).toEqual({ outcome: "release_pull_request_missing" });
+    });
+
+    it("never mutates the other target's already-recorded merge result", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      await repository.recordReleaseMergeResult(releaseIntentId, mainMergeIdentity());
+      const mainRecordedAtBefore = (await docRef.get()).data()?.merges?.main?.recordedAt;
+
+      // Act — a conflicting attempt on develop must never touch main.
+      await repository.recordReleaseMergeResult(releaseIntentId, {
+        target: "develop",
+        number: developPrNumber,
+        headSha: startCommitSha,
+        mergeCommitSha: "5".repeat(40),
+      });
+      await repository.recordReleaseMergeResult(releaseIntentId, {
+        target: "develop",
+        number: developPrNumber,
+        headSha: startCommitSha,
+        mergeCommitSha: "6".repeat(40),
+      });
+
+      // Assert
+      const data = (await docRef.get()).data();
+      expect(data?.merges?.main?.recordedAt).toEqual(mainRecordedAtBefore);
+      expect(data?.merges?.main?.mergeCommitSha).toBe("3".repeat(40));
+      expect(data?.merges?.develop?.mergeCommitSha).toBe("5".repeat(40));
+    });
+
+    it("given many concurrent recordings of the same trusted merge result, exactly one create is persisted and the rest converge idempotently", async () => {
+      // Arrange
+      const { releaseIntentId } = await seedReleaseIntentWithPullRequests();
+      const docRef = firestore.collection("releaseIntents").doc(releaseIntentId);
+      const repository = createFirestoreReleaseIntentRepository();
+      const identity = mainMergeIdentity();
+      const attemptCount = 5;
+
+      // Act
+      const outcomes = await Promise.all(
+        Array.from({ length: attemptCount }, () => repository.recordReleaseMergeResult(releaseIntentId, identity)),
+      );
+
+      // Assert
+      expect(outcomes.filter((outcome) => outcome.outcome === "created")).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome.outcome === "already_recorded")).toHaveLength(attemptCount - 1);
+      const data = (await docRef.get()).data();
+      expect(data?.merges?.main?.mergeCommitSha).toBe("3".repeat(40));
+    });
+  });
 });

@@ -88,6 +88,25 @@ const releaseCiResultSchema = z.object({
   recordedAt: z.instanceof(Timestamp),
 });
 
+/**
+ * The durably-recorded, immutable evidence that a release Pull Request for one target (`main` or
+ * `develop`) was safely merged — present only once `releaseIntentRepository.ts`'s
+ * `recordReleaseMergeResult` has recorded one for that target. Self-contained like
+ * `releaseCiResultSchema`: `number`/`baseBranch`/`headBranch`/`headSha` are snapshotted from the
+ * already-immutable, already-persisted `pullRequests.{target}` record at the moment the merge was
+ * durably recorded (never independently caller-supplied) — the only genuinely new externally
+ * observed identity is `mergeCommitSha`, GitHub's own record of the merge commit it created.
+ * Immutable once set: a merge record must never silently change to a different `mergeCommitSha`.
+ */
+const releaseMergeResultSchema = z.object({
+  number: z.number(),
+  baseBranch: branchNameSchema,
+  headBranch: branchNameSchema,
+  headSha: commitShaSchema,
+  mergeCommitSha: commitShaSchema,
+  recordedAt: z.instanceof(Timestamp),
+});
+
 /** Shape of a `releaseIntents/{releaseIntentId}` Firestore document's data. */
 export const releaseIntentDocumentSchema = z.object({
   releaseIntentId: z.string().min(1),
@@ -107,6 +126,12 @@ export const releaseIntentDocumentSchema = z.object({
     .object({
       main: releaseCiResultSchema.optional(),
       develop: releaseCiResultSchema.optional(),
+    })
+    .optional(),
+  merges: z
+    .object({
+      main: releaseMergeResultSchema.optional(),
+      develop: releaseMergeResultSchema.optional(),
     })
     .optional(),
 });

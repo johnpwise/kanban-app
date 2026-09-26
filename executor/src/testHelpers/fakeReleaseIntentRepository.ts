@@ -1,11 +1,13 @@
 import type {
   RecordReleaseCiResultOutcome,
   RecordReleaseIntentOutcome,
+  RecordReleaseMergeResultOutcome,
   RecordReleasePullRequestResultOutcome,
   RecordReleaseStartResultOutcome,
   ReleaseCiResultIdentity,
   ReleaseIntentIdentity,
   ReleaseIntentRepository,
+  ReleaseMergeResultIdentity,
   ReleasePullRequestResultIdentity,
   ReleaseStartResultIdentity,
 } from "../releaseIntentRepository";
@@ -34,6 +36,11 @@ export interface FakeRecordReleaseCiResultCall {
   identity: ReleaseCiResultIdentity;
 }
 
+export interface FakeRecordReleaseMergeResultCall {
+  releaseIntentId: string;
+  identity: ReleaseMergeResultIdentity;
+}
+
 export function createFakeReleaseIntentRepository(behavior: {
   data?: unknown;
   throwError?: Error;
@@ -45,6 +52,8 @@ export function createFakeReleaseIntentRepository(behavior: {
   recordReleasePullRequestResultThrowError?: Error;
   recordReleaseCiResult?: RecordReleaseCiResultOutcome;
   recordReleaseCiResultThrowError?: Error;
+  recordReleaseMergeResult?: RecordReleaseMergeResultOutcome;
+  recordReleaseMergeResultThrowError?: Error;
 }): {
   repository: ReleaseIntentRepository;
   calls: FakeReleaseIntentRepositoryCall[];
@@ -52,18 +61,21 @@ export function createFakeReleaseIntentRepository(behavior: {
   recordReleaseStartResultCalls: FakeRecordReleaseStartResultCall[];
   recordReleasePullRequestResultCalls: FakeRecordReleasePullRequestResultCall[];
   recordReleaseCiResultCalls: FakeRecordReleaseCiResultCall[];
+  recordReleaseMergeResultCalls: FakeRecordReleaseMergeResultCall[];
 } {
   const calls: FakeReleaseIntentRepositoryCall[] = [];
   const recordReleaseIntentCalls: FakeRecordReleaseIntentCall[] = [];
   const recordReleaseStartResultCalls: FakeRecordReleaseStartResultCall[] = [];
   const recordReleasePullRequestResultCalls: FakeRecordReleasePullRequestResultCall[] = [];
   const recordReleaseCiResultCalls: FakeRecordReleaseCiResultCall[] = [];
+  const recordReleaseMergeResultCalls: FakeRecordReleaseMergeResultCall[] = [];
   return {
     calls,
     recordReleaseIntentCalls,
     recordReleaseStartResultCalls,
     recordReleasePullRequestResultCalls,
     recordReleaseCiResultCalls,
+    recordReleaseMergeResultCalls,
     repository: {
       async loadReleaseIntentData(releaseIntentId: string) {
         calls.push({ releaseIntentId });
@@ -99,6 +111,13 @@ export function createFakeReleaseIntentRepository(behavior: {
           throw behavior.recordReleaseCiResultThrowError;
         }
         return behavior.recordReleaseCiResult ?? { outcome: "created" };
+      },
+      async recordReleaseMergeResult(releaseIntentId: string, identity: ReleaseMergeResultIdentity) {
+        recordReleaseMergeResultCalls.push({ releaseIntentId, identity });
+        if (behavior.recordReleaseMergeResultThrowError) {
+          throw behavior.recordReleaseMergeResultThrowError;
+        }
+        return behavior.recordReleaseMergeResult ?? { outcome: "created" };
       },
     },
   };
