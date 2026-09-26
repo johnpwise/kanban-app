@@ -6,6 +6,7 @@ import { adaReleaseRepository } from "./adaReleaseControllerRunLauncherConfig";
 import { launchAdaCiControllerJob, launchAdaCiControllerJobInEmulator } from "./adaCiControllerJobLauncher";
 import { launchAdaExecutorJob, launchAdaExecutorJobInEmulator } from "./adaExecutorJobLauncher";
 import { launchAdaMergeControllerJob, launchAdaMergeControllerJobInEmulator } from "./adaMergeControllerJobLauncher";
+import { launchAdaReleaseCiControllerJob, launchAdaReleaseCiControllerJobInEmulator } from "./adaReleaseCiControllerJobLauncher";
 import { launchAdaReleaseControllerJob, launchAdaReleaseControllerJobInEmulator } from "./adaReleaseControllerJobLauncher";
 import {
   launchAdaReleasePullRequestControllerJob,
@@ -15,6 +16,7 @@ import { createFirestoreExecutionRunTransaction } from "./firestoreExecutionRunT
 import { launchAdaMergeControl } from "./launchAdaMergeControl";
 import { launchDeliveryCiControl } from "./launchDeliveryCiControl";
 import { launchExecutionRun } from "./launchExecutionRun";
+import { launchReleaseCiControl } from "./launchReleaseCiControl";
 import { launchReleasePullRequestControl } from "./launchReleasePullRequestControl";
 import { launchReleaseStart } from "./launchReleaseStart";
 import { handleAdaExecutionRequestPublished } from "./onAdaExecutionRequestPublished";
@@ -276,6 +278,56 @@ export const launchAdaReleasePullRequestControl = onDocumentUpdated(
         process.env.FUNCTIONS_EMULATOR === "true"
           ? launchAdaReleasePullRequestControllerJobInEmulator
           : launchAdaReleasePullRequestControllerJob,
+      logger,
+    });
+  },
+);
+
+/**
+ * Separate again from every trigger above: this one observes the *update* that follows a durable
+ * release Pull Request being recorded (`pullRequests.{main|develop}` becoming present, recorded by
+ * `executor/src/releasePullRequestCompletionController.ts` via `recordReleasePullRequestResult`)
+ * and launches the separate `ada-release-ci-controller` Job, which independently observes and
+ * durably finalizes the trusted terminal CI result for that target (see
+ * `executor/src/releaseCiControllerMain.ts`). `main` and `develop` are persisted as separate
+ * document updates, so this trigger checks each target's own absent→present transition
+ * independently via `isReleasePullRequestRecordedEligibleForCiControl` and may request a launch for
+ * either or both in a single event. Most updates on this document are not that transition (an
+ * unrelated field write, and later `ci` persistence — this very stage's own durable output — all
+ * pass through the same trigger and are skipped). `releaseIntents/{releaseIntentId}` is also
+ * written to directly by unrelated emulator-backed integration tests, so — same as every other
+ * launcher above — the emulator path swaps in a no-op Job launcher. Region matches the other
+ * triggers for the same reason (co-located with the Firestore database they read from).
+ */
+export const launchAdaReleaseCiControl = onDocumentUpdated(
+  {
+    document: "releaseIntents/{releaseIntentId}",
+    region: "europe-west2",
+    // A transient Cloud Run API failure is rethrown by launchReleaseCiControl so Firebase retries
+    // the event; redelivery is safe even though it is not a genuine eligibility re-check — the
+    // release-ci-controller independently finalizes each target and stops polling one once its
+    // result is durably persisted (PR #67), so a redundant launch is a no-op at the controller
+    // level, not a new dedup mechanism needed here.
+    // https://firebase.google.com/docs/functions/retries
+    retry: true,
+    // Must run as the SA granted `roles/run.jobsExecutorWithOverrides` on the
+    // `ada-release-ci-controller` Cloud Run Job. Reuses the same `ada-launcher-runtime` identity as
+    // the other launchers above; granting it that additional binding on the new Job is a live IAM
+    // mutation, deferred to an explicit approval boundary (not performed by this code change) —
+    // same deferral already recorded for the CI/merge/release-start/release-pr launchers.
+    serviceAccount: "ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com",
+  },
+  async (event) => {
+    await launchReleaseCiControl({
+      documentId: event.params.releaseIntentId,
+      before: event.data?.before.data(),
+      after: event.data?.after.data(),
+      eventId: event.id,
+      // Same emulator guard as the other launchers above, and for the same reason: emulator-backed
+      // integration tests write to releaseIntents/{id} directly and must never reach the real
+      // Cloud Run Admin API.
+      launchJob:
+        process.env.FUNCTIONS_EMULATOR === "true" ? launchAdaReleaseCiControllerJobInEmulator : launchAdaReleaseCiControllerJob,
       logger,
     });
   },
