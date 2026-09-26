@@ -185,6 +185,86 @@ describe("parseReleaseIntentDocument", () => {
     ).toThrow();
   });
 
+  it("parses a valid document that also carries durably recorded merge evidence for both targets", () => {
+    const documentWithMerges = {
+      ...validDocument,
+      merges: {
+        main: {
+          number: 101,
+          baseBranch: "main",
+          headBranch: "release/0.2.0",
+          headSha: "c".repeat(40),
+          mergeCommitSha: "d".repeat(40),
+          recordedAt: Timestamp.fromMillis(0),
+        },
+        develop: {
+          number: 102,
+          baseBranch: "develop",
+          headBranch: "release/0.2.0",
+          headSha: "c".repeat(40),
+          mergeCommitSha: "e".repeat(40),
+          recordedAt: Timestamp.fromMillis(0),
+        },
+      },
+    };
+    const parsed = parseReleaseIntentDocument(validDocument.releaseIntentId, documentWithMerges);
+    expect(parsed).toEqual(documentWithMerges);
+  });
+
+  it("parses a valid document with only one target's merge evidence recorded", () => {
+    const documentWithOneMerge = {
+      ...validDocument,
+      merges: {
+        main: {
+          number: 101,
+          baseBranch: "main",
+          headBranch: "release/0.2.0",
+          headSha: "c".repeat(40),
+          mergeCommitSha: "d".repeat(40),
+          recordedAt: Timestamp.fromMillis(0),
+        },
+      },
+    };
+    const parsed = parseReleaseIntentDocument(validDocument.releaseIntentId, documentWithOneMerge);
+    expect(parsed).toEqual(documentWithOneMerge);
+  });
+
+  it("throws on schema validation failure (malformed merges.main.mergeCommitSha)", () => {
+    expect(() =>
+      parseReleaseIntentDocument(validDocument.releaseIntentId, {
+        ...validDocument,
+        merges: {
+          main: {
+            number: 101,
+            baseBranch: "main",
+            headBranch: "release/0.2.0",
+            headSha: "c".repeat(40),
+            mergeCommitSha: "short",
+            recordedAt: Timestamp.fromMillis(0),
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("throws on schema validation failure (malformed merges.main.headSha)", () => {
+    expect(() =>
+      parseReleaseIntentDocument(validDocument.releaseIntentId, {
+        ...validDocument,
+        merges: {
+          main: {
+            number: 101,
+            baseBranch: "main",
+            headBranch: "release/0.2.0",
+            headSha: "short",
+            mergeCommitSha: "d".repeat(40),
+            recordedAt: Timestamp.fromMillis(0),
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
   it("throws ReleaseIntentValidationError when the document id does not match releaseIntentId", () => {
     expect(() => parseReleaseIntentDocument("some-other-id", validDocument)).toThrow(ReleaseIntentValidationError);
   });

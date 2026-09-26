@@ -82,6 +82,29 @@ export type RecordReleaseCiResultOutcome =
   | { outcome: "release_pull_request_missing" }
   | { outcome: "release_pull_request_identity_mismatch" };
 
+/** The full trusted merge identity a release-merge completion controller has obtained from either a
+ * freshly completed guarded GitHub merge (`executeEligibleReleaseMerge`'s `merged` outcome) or a
+ * safely reconciled crash-recovery observation (its `already_merged` outcome) — both are equally
+ * trusted completion inputs. `number`/`headSha` are the exact release-PR identity that was merged,
+ * re-verified inside the transaction against the durably persisted `pullRequests.{target}` record
+ * (never independently trusted alone); `mergeCommitSha` is the one genuinely new externally observed
+ * identity — GitHub's own record of the commit it created for the merge. */
+export interface ReleaseMergeResultIdentity {
+  target: ReleasePullRequestTarget;
+  number: number;
+  headSha: string;
+  mergeCommitSha: string;
+}
+
+export type RecordReleaseMergeResultOutcome =
+  | { outcome: "created" }
+  | { outcome: "already_recorded" }
+  | { outcome: "conflict" }
+  | { outcome: "release_intent_not_found" }
+  | { outcome: "release_intent_invalid" }
+  | { outcome: "release_pull_request_missing" }
+  | { outcome: "release_pull_request_identity_mismatch" };
+
 export interface ReleaseIntentRepository {
   /** Returns the raw document data, or `undefined` if no such document exists. Never writes. */
   loadReleaseIntentData(releaseIntentId: string): Promise<unknown | undefined>;
@@ -178,6 +201,38 @@ export interface ReleaseIntentRepository {
    * idempotent write in this module.
    */
   recordReleaseCiResult(releaseIntentId: string, identity: ReleaseCiResultIdentity): Promise<RecordReleaseCiResultOutcome>;
+  /**
+   * Durably records trusted, freshly-verified or safely-reconciled release merge evidence for one
+   * release Pull Request target (`main` or `develop`) on the existing `releaseIntents/{releaseIntentId}`
+   * document, associated with (never replacing) its immutable `pullRequests.{target}` result. Fails
+   * closed rather than writing when: the intent document does not exist (`release_intent_not_found`);
+   * it exists but fails `parseReleaseIntentDocument` schema validation (`release_intent_invalid`); it
+   * has no durable `pullRequests.{target}` result yet (`release_pull_request_missing`); or that
+   * persisted result's `number`/`headSha` disagrees with `identity.number`/`identity.headSha` — the
+   * exact release-PR identity the trusted merge result was obtained against
+   * (`release_pull_request_identity_mismatch`) — this is the race-protection re-verification: a
+   * caller can never persist merge evidence against a release Pull Request identity that has since
+   * changed, or that was computed against a stale expectation. Because `pullRequests.{target}` is
+   * itself immutable once written, a `(number, headSha)` match transitively proves the release
+   * intent's own immutable `repository`/`version`/`sourceBranch`/`sourceRevision` and the PR's
+   * `headBranch` still agree — `headBranch`/`baseBranch` are read from that trusted persisted record,
+   * never from the caller, into the new `merges.{target}` evidence.
+   *
+   * Once those checks pass: if no merge result is present yet for `identity.target`, sets
+   * `{ number, baseBranch: identity.target, headBranch, headSha, mergeCommitSha, recordedAt }`
+   * (`headBranch` from the persisted `pullRequests.{target}`; a Firestore server timestamp — never a
+   * caller-supplied value) at `merges.{target}` and returns `{ outcome: "created" }`. Idempotency
+   * identity is the full result tuple `(number, headSha, mergeCommitSha)`: if one is already present
+   * with the identical tuple (this call or a concurrent one committed first — including the
+   * crash-recovery case where a rerun's `already_merged` reconciliation reproduces the exact same
+   * trusted identity a prior `merged` completion already recorded), returns
+   * `{ outcome: "already_recorded" }` without writing; if one is already present with *any* differing
+   * field, returns `{ outcome: "conflict" }` without writing — established merge evidence is never
+   * silently overwritten, and a merge record never silently changes to a different `mergeCommitSha`.
+   * The other target's merge result, if any, is never read or touched. Read-check-write happens
+   * inside a single Firestore transaction, mirroring every other idempotent write in this module.
+   */
+  recordReleaseMergeResult(releaseIntentId: string, identity: ReleaseMergeResultIdentity): Promise<RecordReleaseMergeResultOutcome>;
 }
 
 let firestore: Firestore | undefined;
@@ -407,6 +462,56 @@ export function createFirestoreReleaseIntentRepository(): ReleaseIntentRepositor
           existing.htmlUrl === identity.htmlUrl &&
           existing.conclusion === identity.conclusion
         ) {
+          return { outcome: "already_recorded" };
+        }
+
+        return { outcome: "conflict" };
+      });
+    },
+
+    async recordReleaseMergeResult(releaseIntentId: string, identity: ReleaseMergeResultIdentity) {
+      const firestore = getReleaseIntentFirestore();
+      const docRef = firestore.collection(RELEASE_INTENTS_COLLECTION).doc(releaseIntentId);
+
+      return firestore.runTransaction<RecordReleaseMergeResultOutcome>(async (transaction) => {
+        const snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) {
+          return { outcome: "release_intent_not_found" };
+        }
+
+        let intent;
+        try {
+          intent = parseReleaseIntentDocument(releaseIntentId, snapshot.data());
+        } catch {
+          return { outcome: "release_intent_invalid" };
+        }
+
+        const persistedPullRequest = intent.pullRequests?.[identity.target];
+        if (!persistedPullRequest) {
+          return { outcome: "release_pull_request_missing" };
+        }
+
+        if (persistedPullRequest.number !== identity.number || persistedPullRequest.headSha !== identity.headSha) {
+          return { outcome: "release_pull_request_identity_mismatch" };
+        }
+
+        const existing = intent.merges?.[identity.target];
+
+        if (!existing) {
+          transaction.update(docRef, {
+            [`merges.${identity.target}`]: {
+              number: identity.number,
+              baseBranch: identity.target,
+              headBranch: persistedPullRequest.headBranch,
+              headSha: persistedPullRequest.headSha,
+              mergeCommitSha: identity.mergeCommitSha,
+              recordedAt: FieldValue.serverTimestamp(),
+            },
+          });
+          return { outcome: "created" };
+        }
+
+        if (existing.number === identity.number && existing.headSha === identity.headSha && existing.mergeCommitSha === identity.mergeCommitSha) {
           return { outcome: "already_recorded" };
         }
 
