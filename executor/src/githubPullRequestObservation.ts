@@ -4,24 +4,26 @@ import type { MintGithubDeliveryCredential, MintGithubDeliveryCredentialOutcome 
 
 type CredentialFailureReason = Exclude<MintGithubDeliveryCredentialOutcome, { ok: true }>["reason"];
 
-export interface ObserveDeliveryPullRequestRequest {
+export interface ObserveGithubPullRequestRequest {
   /** The immutable, already-validated `owner/repo` identity — never derived from workspace `origin`. */
   repository: string;
-  /** The durably persisted PR identity (`executionRuns/{id}.delivery.pullRequest.number`) — never a
-   * substitute PR discovered by searching for a matching branch. */
+  /** The durably persisted PR identity (e.g. `executionRuns/{id}.delivery.pullRequest.number` or
+   * `releaseIntents/{id}.pullRequests.{target}.number`) — never a substitute PR discovered by
+   * searching for a matching branch. */
   pullRequestNumber: number;
 }
 
-export interface ObserveDeliveryPullRequestParams extends ObserveDeliveryPullRequestRequest {
+export interface ObserveGithubPullRequestParams extends ObserveGithubPullRequestRequest {
   fetchImpl: typeof fetch;
   mintCredential: MintGithubDeliveryCredential;
 }
 
-/** The exact live GitHub identity fields the merge-eligibility trust boundary reconciles against
- * durable ADA state. `headRepositoryFullName` is `null` only when GitHub reports no head
- * repository at all (e.g. a deleted fork) — itself a same-repository-identity failure for the
- * caller to classify. `mergeable` is passed through exactly as GitHub reports it: `true`, `false`,
- * or `null` while GitHub is still computing it — never coerced to a boolean. */
+/** The exact live GitHub identity fields a caller's trust boundary (e.g. merge eligibility, release
+ * PR verification) reconciles against durable ADA state. `headRepositoryFullName` is `null` only
+ * when GitHub reports no head repository at all (e.g. a deleted fork) — itself a
+ * same-repository-identity failure for the caller to classify. `mergeable` is passed through
+ * exactly as GitHub reports it: `true`, `false`, or `null` while GitHub is still computing it —
+ * never coerced to a boolean. */
 export interface ObservedPullRequest {
   number: number;
   state: "open" | "closed";
@@ -39,7 +41,7 @@ export interface ObservedPullRequest {
   mergeCommitSha: string | null;
 }
 
-export type ObserveDeliveryPullRequestOutcome =
+export type ObserveGithubPullRequestOutcome =
   | { ok: true; pullRequest: ObservedPullRequest }
   | { ok: false; reason: "credential_unavailable"; credentialReason: CredentialFailureReason; httpStatus?: number }
   | { ok: false; reason: "pull_request_lookup_failed"; httpStatus: number }
@@ -48,9 +50,9 @@ export type ObserveDeliveryPullRequestOutcome =
 
 /** The shape a future orchestration/merge-execution slice depends on: `fetchImpl`/`mintCredential`
  * are bound once at composition time, `repository`/`pullRequestNumber` are passed per call. */
-export type ObserveDeliveryPullRequest = (
-  request: ObserveDeliveryPullRequestRequest,
-) => Promise<ObserveDeliveryPullRequestOutcome>;
+export type ObserveGithubPullRequest = (
+  request: ObserveGithubPullRequestRequest,
+) => Promise<ObserveGithubPullRequestOutcome>;
 
 const pullRequestResponseSchema = z.object({
   number: z.number(),
@@ -72,9 +74,9 @@ const pullRequestResponseSchema = z.object({
 
 /**
  * Observes the exact live GitHub Pull Request identified by `repository` + `pullRequestNumber` —
- * the durably persisted delivery PR identity, never a PR rediscovered by searching for a matching
- * branch. Reuses the existing GitHub App installation credential mint (`mintCredential`) and the
- * same raw-`fetch` request shape as `deliveryCiObservation.ts` / `adaPullRequest.ts`. Read-only: a
+ * a durably persisted PR identity, never a PR rediscovered by searching for a matching branch.
+ * Reuses the existing GitHub App installation credential mint (`mintCredential`) and the same
+ * raw-`fetch` request shape as `deliveryCiObservation.ts` / `githubPullRequest.ts`. Read-only: a
  * single GET against `/repos/{repository}/pulls/{number}`; this function does not wait, poll, or
  * retry — a caller wanting a fresher observation calls this again later.
  *
@@ -83,9 +85,9 @@ const pullRequestResponseSchema = z.object({
  * returns response bodies/headers or the credential itself — only safe `httpStatus` values and
  * typed reasons, matching `githubAppCredential.ts` and `deliveryCiObservation.ts`.
  */
-export async function observeDeliveryPullRequest(
-  params: ObserveDeliveryPullRequestParams,
-): Promise<ObserveDeliveryPullRequestOutcome> {
+export async function observeGithubPullRequest(
+  params: ObserveGithubPullRequestParams,
+): Promise<ObserveGithubPullRequestOutcome> {
   const { repository, pullRequestNumber, fetchImpl, mintCredential } = params;
 
   const credentialOutcome = await mintCredential({ repository });

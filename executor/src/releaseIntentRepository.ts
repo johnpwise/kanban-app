@@ -3,6 +3,7 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 
 import { parseReleaseIntentDocument } from "./schemas/releaseIntentDocument";
 
+import type { ReleasePullRequestTarget } from "./schemas/releaseIntentDocument";
 import type { Firestore } from "firebase-admin/firestore";
 
 const RELEASE_INTENTS_COLLECTION = "releaseIntents";
@@ -32,6 +33,28 @@ export type RecordReleaseStartResultOutcome =
   | { outcome: "release_intent_not_found" }
   | { outcome: "release_intent_invalid" }
   | { outcome: "release_intent_identity_mismatch" };
+
+/** The full trusted release-PR identity a completion controller has independently, freshly
+ * verified via GitHub observation (never a raw create/reuse response alone). `target` selects
+ * which of the two trusted bases (`main`/`develop`) this result is for; `releaseBranch`/`commitSha`
+ * must agree exactly with the release intent's persisted, immutable `start` result — the anchor for
+ * every release PR's head — not an independently caller-supplied value. */
+export interface ReleasePullRequestResultIdentity extends ReleaseIntentIdentity {
+  target: ReleasePullRequestTarget;
+  releaseBranch: string;
+  commitSha: string;
+  number: number;
+}
+
+export type RecordReleasePullRequestResultOutcome =
+  | { outcome: "created" }
+  | { outcome: "already_recorded" }
+  | { outcome: "conflict" }
+  | { outcome: "release_intent_not_found" }
+  | { outcome: "release_intent_invalid" }
+  | { outcome: "release_intent_identity_mismatch" }
+  | { outcome: "release_start_missing" }
+  | { outcome: "release_start_identity_mismatch" };
 
 export interface ReleaseIntentRepository {
   /** Returns the raw document data, or `undefined` if no such document exists. Never writes. */
@@ -69,6 +92,34 @@ export interface ReleaseIntentRepository {
    * Firestore transaction, mirroring every other idempotent write in this module.
    */
   recordReleaseStartResult(releaseIntentId: string, identity: ReleaseStartResultIdentity): Promise<RecordReleaseStartResultOutcome>;
+  /**
+   * Durably records a trusted, freshly-verified release Pull Request result for one target (`main`
+   * or `develop`) on the existing `releaseIntents/{releaseIntentId}` document, associated with
+   * (never replacing) its immutable release identity or its trusted `start` result. Fails closed
+   * rather than writing when: the intent document does not exist (`release_intent_not_found`); it
+   * exists but fails `parseReleaseIntentDocument` schema validation (`release_intent_invalid`); it
+   * validates but its immutable `(repository, version, sourceBranch, sourceRevision)` disagrees with
+   * the supplied `identity` (`release_intent_identity_mismatch`); it has no durable `start` result
+   * yet (`release_start_missing`); or its `start.releaseBranch`/`start.commitSha` disagrees with the
+   * supplied `identity.releaseBranch`/`identity.commitSha` (`release_start_identity_mismatch`) — a
+   * caller can never persist a release-PR result against a release intent, or release-start result,
+   * it does not exactly match.
+   *
+   * Once those checks pass: if no result is present yet for `identity.target`, sets
+   * `{ number, baseBranch: identity.target, headBranch: identity.releaseBranch, headSha:
+   * identity.commitSha, recordedAt }` (a Firestore server timestamp — never a caller-supplied
+   * value) at `pullRequests.{target}` and returns `{ outcome: "created" }`; if one is already
+   * present with the identical `number` (this call or a concurrent one committed first), returns
+   * `{ outcome: "already_recorded" }` without writing; if one is already present with a *differing*
+   * `number`, returns `{ outcome: "conflict" }` without writing — an established PR result is never
+   * silently overwritten. The other target's result, if any, is never read or touched. Read-check-
+   * write happens inside a single Firestore transaction, mirroring every other idempotent write in
+   * this module.
+   */
+  recordReleasePullRequestResult(
+    releaseIntentId: string,
+    identity: ReleasePullRequestResultIdentity,
+  ): Promise<RecordReleasePullRequestResultOutcome>;
 }
 
 let firestore: Firestore | undefined;
@@ -177,6 +228,68 @@ export function createFirestoreReleaseIntentRepository(): ReleaseIntentRepositor
         }
 
         if (intent.start.releaseBranch === identity.releaseBranch && intent.start.commitSha === identity.commitSha) {
+          return { outcome: "already_recorded" };
+        }
+
+        return { outcome: "conflict" };
+      });
+    },
+
+    async recordReleasePullRequestResult(releaseIntentId: string, identity: ReleasePullRequestResultIdentity) {
+      const firestore = getReleaseIntentFirestore();
+      const docRef = firestore.collection(RELEASE_INTENTS_COLLECTION).doc(releaseIntentId);
+
+      return firestore.runTransaction<RecordReleasePullRequestResultOutcome>(async (transaction) => {
+        const snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) {
+          return { outcome: "release_intent_not_found" };
+        }
+
+        let intent;
+        try {
+          intent = parseReleaseIntentDocument(releaseIntentId, snapshot.data());
+        } catch {
+          return { outcome: "release_intent_invalid" };
+        }
+
+        if (
+          intent.repository !== identity.repository ||
+          intent.version !== identity.version ||
+          intent.sourceBranch !== identity.sourceBranch ||
+          intent.sourceRevision !== identity.sourceRevision
+        ) {
+          return { outcome: "release_intent_identity_mismatch" };
+        }
+
+        if (!intent.start) {
+          return { outcome: "release_start_missing" };
+        }
+
+        if (intent.start.releaseBranch !== identity.releaseBranch || intent.start.commitSha !== identity.commitSha) {
+          return { outcome: "release_start_identity_mismatch" };
+        }
+
+        const existing = intent.pullRequests?.[identity.target];
+
+        if (!existing) {
+          transaction.update(docRef, {
+            [`pullRequests.${identity.target}`]: {
+              number: identity.number,
+              baseBranch: identity.target,
+              headBranch: identity.releaseBranch,
+              headSha: identity.commitSha,
+              recordedAt: FieldValue.serverTimestamp(),
+            },
+          });
+          return { outcome: "created" };
+        }
+
+        if (
+          existing.number === identity.number &&
+          existing.baseBranch === identity.target &&
+          existing.headBranch === identity.releaseBranch &&
+          existing.headSha === identity.commitSha
+        ) {
           return { outcome: "already_recorded" };
         }
 

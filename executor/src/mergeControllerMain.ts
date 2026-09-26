@@ -1,5 +1,5 @@
 import { parseExecutorConfig } from "./config";
-import { observeDeliveryPullRequest } from "./deliveryPullRequestObservation";
+import { observeGithubPullRequest } from "./githubPullRequestObservation";
 import { createFirestoreExecutionRunRepository } from "./executionRunRepository";
 import { exitCodeForMergeControllerOutcome } from "./exitCode";
 import { mintGithubDeliveryCredential } from "./githubAppCredential";
@@ -9,7 +9,7 @@ import { executeEligibleDeliveryMerge } from "./mergeExecution";
 import { runMergeCompletionController } from "./mergeCompletionController";
 import { runMergeCompletionControllerWithRetry } from "./mergeCompletionRetryController";
 
-import type { ObserveDeliveryPullRequest } from "./deliveryPullRequestObservation";
+import type { ObserveGithubPullRequest } from "./githubPullRequestObservation";
 import type { MintGithubDeliveryCredential } from "./githubAppCredential";
 import type { MergeAdaPullRequest } from "./adaPullRequestMerge";
 import type { EvaluateMergeEligibilityForRun } from "./mergeExecution";
@@ -41,8 +41,8 @@ const jsonLogger: ExecutorLogger = {
 const mintDeliveryCredential: MintGithubDeliveryCredential = ({ repository }) =>
   mintGithubDeliveryCredential({ repository, env: process.env, now: Date.now, fetchImpl: fetch });
 
-const observePullRequest: ObserveDeliveryPullRequest = (request) =>
-  observeDeliveryPullRequest({ ...request, fetchImpl: fetch, mintCredential: mintDeliveryCredential });
+const observePullRequest: ObserveGithubPullRequest = (request) =>
+  observeGithubPullRequest({ ...request, fetchImpl: fetch, mintCredential: mintDeliveryCredential });
 
 const mergePullRequest: MergeAdaPullRequest = (request) =>
   mergeAdaPullRequest({ ...request, fetchImpl: fetch, mintCredential: mintDeliveryCredential });

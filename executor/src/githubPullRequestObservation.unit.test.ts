@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { observeDeliveryPullRequest } from "./deliveryPullRequestObservation";
+import { observeGithubPullRequest } from "./githubPullRequestObservation";
 
 import type { MintGithubDeliveryCredential } from "./githubAppCredential";
 
@@ -59,13 +59,13 @@ function githubPullRequest(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("observeDeliveryPullRequest", () => {
+describe("observeGithubPullRequest", () => {
   it("should return the observed pull request identity on a successful lookup", async () => {
     // Arrange
     const { fetchImpl, calls } = fakeFetch(() => jsonResponse(githubPullRequest(), 200));
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toEqual({
@@ -101,7 +101,7 @@ describe("observeDeliveryPullRequest", () => {
     );
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toMatchObject({ ok: true, pullRequest: { state: "closed", merged: true, draft: true } });
@@ -112,7 +112,7 @@ describe("observeDeliveryPullRequest", () => {
     const { fetchImpl } = fakeFetch(() => jsonResponse(githubPullRequest({ mergeable: null }), 200));
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toMatchObject({ ok: true, pullRequest: { mergeable: null } });
@@ -123,7 +123,7 @@ describe("observeDeliveryPullRequest", () => {
     const { fetchImpl } = fakeFetch(() => jsonResponse(githubPullRequest({ mergeable: false }), 200));
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toMatchObject({ ok: true, pullRequest: { mergeable: false } });
@@ -137,7 +137,7 @@ describe("observeDeliveryPullRequest", () => {
     );
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toMatchObject({ ok: true, pullRequest: { merged: true, mergeCommitSha: MERGE_COMMIT_SHA } });
@@ -148,7 +148,7 @@ describe("observeDeliveryPullRequest", () => {
     const { fetchImpl } = fakeFetch(() => jsonResponse(githubPullRequest({ merge_commit_sha: null }), 200));
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toMatchObject({ ok: true, pullRequest: { mergeCommitSha: null } });
@@ -161,7 +161,7 @@ describe("observeDeliveryPullRequest", () => {
     const { fetchImpl } = fakeFetch(() => jsonResponse(malformed, 200));
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toEqual({ ok: false, reason: "pull_request_response_invalid" });
@@ -172,7 +172,7 @@ describe("observeDeliveryPullRequest", () => {
     const { fetchImpl } = fakeFetch(() => jsonResponse(githubPullRequest({ head: { sha: HEAD_SHA, ref: "feature", repo: null } }), 200));
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toMatchObject({ ok: true, pullRequest: { headRepositoryFullName: null } });
@@ -183,7 +183,7 @@ describe("observeDeliveryPullRequest", () => {
     const { fetchImpl } = fakeFetch(() => jsonResponse({ number: PULL_REQUEST_NUMBER }, 200));
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toEqual({ ok: false, reason: "pull_request_response_invalid" });
@@ -194,7 +194,7 @@ describe("observeDeliveryPullRequest", () => {
     const fetchImpl = (async () => new Response("not json", { status: 200 })) as unknown as typeof fetch;
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toEqual({ ok: false, reason: "pull_request_response_invalid" });
@@ -205,7 +205,7 @@ describe("observeDeliveryPullRequest", () => {
     const { fetchImpl } = fakeFetch(() => jsonResponse({ message: "distinctive-secret-should-not-leak" }, 404));
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toEqual({ ok: false, reason: "pull_request_lookup_failed", httpStatus: 404 });
@@ -219,7 +219,7 @@ describe("observeDeliveryPullRequest", () => {
     }) as unknown as typeof fetch;
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(result).toEqual({ ok: false, reason: "pull_request_lookup_network_error" });
@@ -238,7 +238,7 @@ describe("observeDeliveryPullRequest", () => {
     }) as unknown as typeof fetch;
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: failingMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: failingMintCredential });
 
     // Assert
     expect(result).toEqual({
@@ -258,7 +258,7 @@ describe("observeDeliveryPullRequest", () => {
     }) as unknown as typeof fetch;
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: failingMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: failingMintCredential });
 
     // Assert
     expect(result).toEqual({ ok: false, reason: "credential_unavailable", credentialReason: "config_invalid" });
@@ -269,7 +269,7 @@ describe("observeDeliveryPullRequest", () => {
     const { fetchImpl } = fakeFetch(() => jsonResponse(githubPullRequest(), 200));
 
     // Act
-    const result = await observeDeliveryPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
+    const result = await observeGithubPullRequest({ ...BASE_REQUEST, fetchImpl, mintCredential: okMintCredential });
 
     // Assert
     expect(JSON.stringify(result)).not.toContain("minted-installation-token");

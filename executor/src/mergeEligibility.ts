@@ -1,17 +1,17 @@
 import { parseExecutionRunDocument } from "./schemas/executionRunDocument";
 
-import type { ObserveDeliveryPullRequest, ObservedPullRequest, ObserveDeliveryPullRequestOutcome } from "./deliveryPullRequestObservation";
+import type { ObserveGithubPullRequest, ObservedPullRequest, ObserveGithubPullRequestOutcome } from "./githubPullRequestObservation";
 import type { ExecutionRunRepository } from "./executionRunRepository";
 import type { ExecutorLogger } from "./runExecutor";
 
-type ObservationFailure = Extract<ObserveDeliveryPullRequestOutcome, { ok: false }>;
+type ObservationFailure = Extract<ObserveGithubPullRequestOutcome, { ok: false }>;
 
 export interface EvaluateMergeEligibilityParams {
   executionRunId: string;
   /** Reused unmodified — only `loadExecutionRunData` is called; never a write. */
   repository: ExecutionRunRepository;
   /** The existing one-shot primitive (`fetchImpl`/`mintCredential` already bound at composition). */
-  observePullRequest: ObserveDeliveryPullRequest;
+  observePullRequest: ObserveGithubPullRequest;
   logger?: ExecutorLogger;
 }
 
@@ -154,7 +154,7 @@ export async function evaluateMergeEligibility(params: EvaluateMergeEligibilityP
     expectedCommitSha,
   };
 
-  let observation: ObserveDeliveryPullRequestOutcome;
+  let observation: ObserveGithubPullRequestOutcome;
   try {
     observation = await observePullRequest({ repository: expectedRepository, pullRequestNumber: pullRequest.number });
   } catch {

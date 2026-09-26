@@ -60,6 +60,40 @@ describe("parseReleaseIntentDocument", () => {
     ).toThrow();
   });
 
+  it("parses a valid document that also carries durably recorded release pull request results for both targets", () => {
+    const documentWithPullRequests = {
+      ...validDocument,
+      pullRequests: {
+        main: { number: 101, baseBranch: "main", headBranch: "release/0.2.0", headSha: "c".repeat(40), recordedAt: Timestamp.fromMillis(0) },
+        develop: { number: 102, baseBranch: "develop", headBranch: "release/0.2.0", headSha: "c".repeat(40), recordedAt: Timestamp.fromMillis(0) },
+      },
+    };
+    const parsed = parseReleaseIntentDocument(validDocument.releaseIntentId, documentWithPullRequests);
+    expect(parsed).toEqual(documentWithPullRequests);
+  });
+
+  it("parses a valid document with only one release pull request target recorded", () => {
+    const documentWithOnePullRequest = {
+      ...validDocument,
+      pullRequests: {
+        main: { number: 101, baseBranch: "main", headBranch: "release/0.2.0", headSha: "c".repeat(40), recordedAt: Timestamp.fromMillis(0) },
+      },
+    };
+    const parsed = parseReleaseIntentDocument(validDocument.releaseIntentId, documentWithOnePullRequest);
+    expect(parsed).toEqual(documentWithOnePullRequest);
+  });
+
+  it("throws on schema validation failure (malformed pullRequests.main.headSha)", () => {
+    expect(() =>
+      parseReleaseIntentDocument(validDocument.releaseIntentId, {
+        ...validDocument,
+        pullRequests: {
+          main: { number: 101, baseBranch: "main", headBranch: "release/0.2.0", headSha: "short", recordedAt: Timestamp.fromMillis(0) },
+        },
+      }),
+    ).toThrow();
+  });
+
   it("throws ReleaseIntentValidationError when the document id does not match releaseIntentId", () => {
     expect(() => parseReleaseIntentDocument("some-other-id", validDocument)).toThrow(ReleaseIntentValidationError);
   });

@@ -48,7 +48,7 @@ const mergeResponseSchema = z.object({
  * Performs one guarded `PUT /repos/{repository}/pulls/{pullRequestNumber}/merge` request — the
  * narrow GitHub mutation primitive underneath a merge-execution orchestration. Reuses the existing
  * GitHub App installation credential mint (`mintCredential`) and the same raw-`fetch` request shape
- * as `adaPullRequest.ts` / `deliveryPullRequestObservation.ts`.
+ * as `adaPullRequest.ts` / `githubPullRequestObservation.ts`.
  *
  * `expectedHeadSha` is always sent as the request body's `sha` field — GitHub's own documented
  * precondition — so a Pull Request head that has moved since the caller last checked eligibility

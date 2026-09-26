@@ -99,7 +99,7 @@ async function mintOrFail(
 /**
  * Observes whether a live Git ref (a branch under `heads/` or a tag under `tags/`) exists in
  * `repository`, and its current SHA if so. Reuses the existing GitHub App installation credential
- * mint and the same raw-`fetch` request shape as `deliveryPullRequestObservation.ts`. Read-only: a
+ * mint and the same raw-`fetch` request shape as `githubPullRequestObservation.ts`. Read-only: a
  * single GET against `/repos/{repository}/git/ref/{ref}`.
  *
  * A 404 is a genuine, expected outcome (the ref does not exist) — reported as `{ ok: true, found:
