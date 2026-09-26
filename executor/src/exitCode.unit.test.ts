@@ -5,6 +5,7 @@ import {
   exitCodeForMergeControllerOutcome,
   exitCodeForOutcome,
   exitCodeForReleaseControllerOutcome,
+  exitCodeForReleasePullRequestControllerOutcome,
 } from "./exitCode";
 
 describe("exitCodeForOutcome", () => {
@@ -219,6 +220,85 @@ describe("exitCodeForReleaseControllerOutcome", () => {
 
     // Act
     const code = exitCodeForReleaseControllerOutcome(outcome);
+
+    // Assert
+    expect(code).not.toBe(0);
+  });
+});
+
+describe("exitCodeForReleasePullRequestControllerOutcome", () => {
+  const RECORDED_MAIN = {
+    outcome: "release_pull_request_recorded" as const,
+    releaseIntentId: "johnpwise__kanban-app--0.2.0",
+    target: "main" as const,
+    repository: "johnpwise/kanban-app",
+    version: "0.2.0",
+    releaseBranch: "release/0.2.0",
+    releaseCommitSha: "a".repeat(40),
+    number: 101,
+  };
+  const RECORDED_DEVELOP = { ...RECORDED_MAIN, target: "develop" as const, number: 102 };
+  const ALREADY_RECORDED_MAIN = { ...RECORDED_MAIN, outcome: "release_pull_request_already_recorded" as const };
+  const ALREADY_RECORDED_DEVELOP = { ...RECORDED_DEVELOP, outcome: "release_pull_request_already_recorded" as const };
+
+  it("returns 0 when both targets are freshly recorded", () => {
+    // Arrange
+    const outcome = { releaseIntentId: "johnpwise__kanban-app--0.2.0", main: RECORDED_MAIN, develop: RECORDED_DEVELOP };
+
+    // Act
+    const code = exitCodeForReleasePullRequestControllerOutcome(outcome);
+
+    // Assert
+    expect(code).toBe(0);
+  });
+
+  it("returns 0 when both targets idempotently converge as already recorded", () => {
+    // Arrange
+    const outcome = { releaseIntentId: "johnpwise__kanban-app--0.2.0", main: ALREADY_RECORDED_MAIN, develop: ALREADY_RECORDED_DEVELOP };
+
+    // Act
+    const code = exitCodeForReleasePullRequestControllerOutcome(outcome);
+
+    // Assert
+    expect(code).toBe(0);
+  });
+
+  it("returns 0 for a mix of freshly recorded and already-recorded targets", () => {
+    // Arrange
+    const outcome = { releaseIntentId: "johnpwise__kanban-app--0.2.0", main: ALREADY_RECORDED_MAIN, develop: RECORDED_DEVELOP };
+
+    // Act
+    const code = exitCodeForReleasePullRequestControllerOutcome(outcome);
+
+    // Assert
+    expect(code).toBe(0);
+  });
+
+  it("returns a non-zero code when only one target reached a durable terminal result", () => {
+    // Arrange
+    const outcome = {
+      releaseIntentId: "johnpwise__kanban-app--0.2.0",
+      main: RECORDED_MAIN,
+      develop: { outcome: "not_eligible" as const, releaseIntentId: "johnpwise__kanban-app--0.2.0", target: "develop" as const, eligibility: { eligible: false as const, reason: "release_start_missing" as const } },
+    };
+
+    // Act
+    const code = exitCodeForReleasePullRequestControllerOutcome(outcome);
+
+    // Assert
+    expect(code).not.toBe(0);
+  });
+
+  it("returns a non-zero code when neither target reached a durable terminal result", () => {
+    // Arrange
+    const outcome = {
+      releaseIntentId: "johnpwise__kanban-app--0.2.0",
+      main: { outcome: "release_pull_request_persistence_error" as const, releaseIntentId: "johnpwise__kanban-app--0.2.0", target: "main" as const },
+      develop: { outcome: "release_pull_request_conflict" as const, releaseIntentId: "johnpwise__kanban-app--0.2.0", target: "develop" as const },
+    };
+
+    // Act
+    const code = exitCodeForReleasePullRequestControllerOutcome(outcome);
 
     // Assert
     expect(code).not.toBe(0);

@@ -1,8 +1,10 @@
 import type {
   RecordReleaseIntentOutcome,
+  RecordReleasePullRequestResultOutcome,
   RecordReleaseStartResultOutcome,
   ReleaseIntentIdentity,
   ReleaseIntentRepository,
+  ReleasePullRequestResultIdentity,
   ReleaseStartResultIdentity,
 } from "../releaseIntentRepository";
 
@@ -20,6 +22,11 @@ export interface FakeRecordReleaseStartResultCall {
   identity: ReleaseStartResultIdentity;
 }
 
+export interface FakeRecordReleasePullRequestResultCall {
+  releaseIntentId: string;
+  identity: ReleasePullRequestResultIdentity;
+}
+
 export function createFakeReleaseIntentRepository(behavior: {
   data?: unknown;
   throwError?: Error;
@@ -27,19 +34,24 @@ export function createFakeReleaseIntentRepository(behavior: {
   recordReleaseIntentThrowError?: Error;
   recordReleaseStartResult?: RecordReleaseStartResultOutcome;
   recordReleaseStartResultThrowError?: Error;
+  recordReleasePullRequestResult?: RecordReleasePullRequestResultOutcome;
+  recordReleasePullRequestResultThrowError?: Error;
 }): {
   repository: ReleaseIntentRepository;
   calls: FakeReleaseIntentRepositoryCall[];
   recordReleaseIntentCalls: FakeRecordReleaseIntentCall[];
   recordReleaseStartResultCalls: FakeRecordReleaseStartResultCall[];
+  recordReleasePullRequestResultCalls: FakeRecordReleasePullRequestResultCall[];
 } {
   const calls: FakeReleaseIntentRepositoryCall[] = [];
   const recordReleaseIntentCalls: FakeRecordReleaseIntentCall[] = [];
   const recordReleaseStartResultCalls: FakeRecordReleaseStartResultCall[] = [];
+  const recordReleasePullRequestResultCalls: FakeRecordReleasePullRequestResultCall[] = [];
   return {
     calls,
     recordReleaseIntentCalls,
     recordReleaseStartResultCalls,
+    recordReleasePullRequestResultCalls,
     repository: {
       async loadReleaseIntentData(releaseIntentId: string) {
         calls.push({ releaseIntentId });
@@ -61,6 +73,13 @@ export function createFakeReleaseIntentRepository(behavior: {
           throw behavior.recordReleaseStartResultThrowError;
         }
         return behavior.recordReleaseStartResult ?? { outcome: "created" };
+      },
+      async recordReleasePullRequestResult(releaseIntentId: string, identity: ReleasePullRequestResultIdentity) {
+        recordReleasePullRequestResultCalls.push({ releaseIntentId, identity });
+        if (behavior.recordReleasePullRequestResultThrowError) {
+          throw behavior.recordReleasePullRequestResultThrowError;
+        }
+        return behavior.recordReleasePullRequestResult ?? { outcome: "created" };
       },
     },
   };

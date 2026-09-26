@@ -1,6 +1,7 @@
 import type { DeliveryCiControllerOutcome } from "./deliveryCiController";
 import type { MergeCompletionRetryOutcome } from "./mergeCompletionRetryController";
 import type { EnsureReleaseIntentRecordedOutcome } from "./releaseIntentResolution";
+import type { ReleasePullRequestCompletionControllerOutcome } from "./releasePullRequestCompletionController";
 import type { ReleaseStartCompletionControllerOutcome } from "./releaseStartCompletionController";
 import type { ExecutorOutcome } from "./runExecutor";
 
@@ -59,4 +60,21 @@ export function exitCodeForMergeControllerOutcome(outcome: MergeCompletionRetryO
  */
 export function exitCodeForReleaseControllerOutcome(outcome: ReleaseControllerOutcome): number {
   return outcome.outcome === "started" || outcome.outcome === "release_start_already_recorded" ? 0 : 1;
+}
+
+/**
+ * Pure outcome -> process-exit-code mapping for `releasePullRequestControllerMain.ts`, kept here
+ * for the same reason as the other `exitCodeFor*` functions. Success (`0`) requires **both**
+ * trusted targets (`main`, `develop`) to have reached a durably persisted trusted release-PR
+ * identity — each either a freshly completed `release_pull_request_recorded` or an idempotently
+ * converged `release_pull_request_already_recorded`. Any other per-target outcome for either
+ * target — ineligibility, a create/reuse or fresh-verification failure, or any persistence/
+ * lifecycle-conflict failure — means that target never reached a durable terminal result, and the
+ * whole controller run maps to `1`, even if the other target succeeded: a caller must never treat
+ * a half-completed release-PR stage as done.
+ */
+export function exitCodeForReleasePullRequestControllerOutcome(outcome: ReleasePullRequestCompletionControllerOutcome): number {
+  const isTargetDurable = (target: ReleasePullRequestCompletionControllerOutcome["main"]) =>
+    target.outcome === "release_pull_request_recorded" || target.outcome === "release_pull_request_already_recorded";
+  return isTargetDurable(outcome.main) && isTargetDurable(outcome.develop) ? 0 : 1;
 }

@@ -49,6 +49,22 @@ const releaseStartResultSchema = z.object({
   recordedAt: z.instanceof(Timestamp),
 });
 
+/**
+ * The durably-recorded result of a freshly-verified, guarded release Pull Request create/reuse for
+ * one target (`main` or `develop`) — present only once `releaseIntentRepository.ts`'s
+ * `recordReleasePullRequestResult` has recorded one for that target. `headBranch`/`headSha` are
+ * always the trusted `start.releaseBranch`/`start.commitSha` at the time of recording — never an
+ * independently caller-supplied value — so a persisted result can never drift from the release
+ * commit it evidences. Immutable once set.
+ */
+const releasePullRequestResultSchema = z.object({
+  number: z.number(),
+  baseBranch: branchNameSchema,
+  headBranch: branchNameSchema,
+  headSha: commitShaSchema,
+  recordedAt: z.instanceof(Timestamp),
+});
+
 /** Shape of a `releaseIntents/{releaseIntentId}` Firestore document's data. */
 export const releaseIntentDocumentSchema = z.object({
   releaseIntentId: z.string().min(1),
@@ -58,9 +74,18 @@ export const releaseIntentDocumentSchema = z.object({
   sourceRevision: commitShaSchema,
   requestedAt: z.instanceof(Timestamp),
   start: releaseStartResultSchema.optional(),
+  pullRequests: z
+    .object({
+      main: releasePullRequestResultSchema.optional(),
+      develop: releasePullRequestResultSchema.optional(),
+    })
+    .optional(),
 });
 
 export type ReleaseIntentDocument = z.infer<typeof releaseIntentDocumentSchema>;
+
+/** The two trusted intended base branches for a release's Pull Requests — never caller-selected. */
+export type ReleasePullRequestTarget = "main" | "develop";
 
 export class ReleaseIntentValidationError extends Error {
   constructor(message: string) {

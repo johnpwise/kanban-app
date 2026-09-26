@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { evaluateMergeEligibility } from "./mergeEligibility";
 import { createFakeExecutionRunRepository } from "./testHelpers/fakeExecutionRunRepository";
 
-import type { ObserveDeliveryPullRequest, ObservedPullRequest } from "./deliveryPullRequestObservation";
+import type { ObserveGithubPullRequest, ObservedPullRequest } from "./githubPullRequestObservation";
 
 const EXECUTION_RUN_ID = "req-123";
 const REPOSITORY = "johnpwise/kanban-app";
@@ -70,14 +70,14 @@ function fakeObservePullRequest(
   outcome:
     | { ok: true; pullRequest: ObservedPullRequest }
     | { ok: false; reason: string; [key: string]: unknown },
-): { observePullRequest: ObserveDeliveryPullRequest; calls: { repository: string; pullRequestNumber: number }[] } {
+): { observePullRequest: ObserveGithubPullRequest; calls: { repository: string; pullRequestNumber: number }[] } {
   const calls: { repository: string; pullRequestNumber: number }[] = [];
   return {
     calls,
     observePullRequest: (async (request) => {
       calls.push(request);
       return outcome as never;
-    }) as ObserveDeliveryPullRequest,
+    }) as ObserveGithubPullRequest,
   };
 }
 
