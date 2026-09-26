@@ -25,6 +25,12 @@ function pullRequestResult(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function bothPullRequests() {
+  return {
+    pullRequests: { main: pullRequestResult(), develop: pullRequestResult({ baseBranch: "develop" }) },
+  };
+}
+
 function fakeLaunchJob(
   result: LaunchAdaReleaseCiControllerJobResult = { operationName: "op-1" },
 ): LaunchAdaReleaseCiControllerJob {
@@ -32,24 +38,52 @@ function fakeLaunchJob(
 }
 
 describe("launchReleaseCiControl", () => {
-  it.each(["main", "develop"] as const)(
-    "requests exactly one release-ci-controller launch for a %s pullRequests-recorded transition",
-    async (target) => {
-      const launchJob = fakeLaunchJob();
+  it("requests exactly one release-ci-controller launch when develop completes a main-first pair", async () => {
+    const launchJob = fakeLaunchJob();
 
-      await launchReleaseCiControl({
-        documentId: "intent-1",
-        before: intent(),
-        after: intent({ pullRequests: { [target]: pullRequestResult() } }),
-        eventId: "event-1",
-        launchJob,
-        logger: fakeLogger(),
-      });
+    await launchReleaseCiControl({
+      documentId: "intent-1",
+      before: intent({ pullRequests: { main: pullRequestResult() } }),
+      after: intent(bothPullRequests()),
+      eventId: "event-1",
+      launchJob,
+      logger: fakeLogger(),
+    });
 
-      expect(launchJob).toHaveBeenCalledTimes(1);
-      expect(launchJob).toHaveBeenCalledWith({ releaseIntentId: "intent-1" });
-    },
-  );
+    expect(launchJob).toHaveBeenCalledTimes(1);
+    expect(launchJob).toHaveBeenCalledWith({ releaseIntentId: "intent-1" });
+  });
+
+  it("requests exactly one release-ci-controller launch when both PRs are recorded together", async () => {
+    const launchJob = fakeLaunchJob();
+
+    await launchReleaseCiControl({
+      documentId: "intent-1",
+      before: intent(),
+      after: intent(bothPullRequests()),
+      eventId: "event-1",
+      launchJob,
+      logger: fakeLogger(),
+    });
+
+    expect(launchJob).toHaveBeenCalledTimes(1);
+    expect(launchJob).toHaveBeenCalledWith({ releaseIntentId: "intent-1" });
+  });
+
+  it("does not launch when only main is present after the update", async () => {
+    const launchJob = fakeLaunchJob();
+
+    await launchReleaseCiControl({
+      documentId: "intent-1",
+      before: intent(),
+      after: intent({ pullRequests: { main: pullRequestResult() } }),
+      eventId: "event-1",
+      launchJob,
+      logger: fakeLogger(),
+    });
+
+    expect(launchJob).not.toHaveBeenCalled();
+  });
 
   it("does not launch when neither target is present after the update", async () => {
     const launchJob = fakeLaunchJob();
@@ -66,14 +100,14 @@ describe("launchReleaseCiControl", () => {
     expect(launchJob).not.toHaveBeenCalled();
   });
 
-  it("does not launch a second time when an already-recorded target is updated again (e.g. ci write)", async () => {
+  it("does not launch again when an already-complete pair receives a later ci write", async () => {
     const launchJob = fakeLaunchJob();
 
     await launchReleaseCiControl({
       documentId: "intent-1",
-      before: intent({ pullRequests: { main: pullRequestResult() } }),
+      before: intent(bothPullRequests()),
       after: intent({
-        pullRequests: { main: pullRequestResult() },
+        ...bothPullRequests(),
         ci: { main: { ...pullRequestResult(), state: "succeeded", runId: 1, htmlUrl: "https://x" } },
       }),
       eventId: "event-1",
@@ -82,27 +116,6 @@ describe("launchReleaseCiControl", () => {
     });
 
     expect(launchJob).not.toHaveBeenCalled();
-  });
-
-  it("launches twice when both targets transition together in the same update", async () => {
-    const launchJob = fakeLaunchJob();
-
-    await launchReleaseCiControl({
-      documentId: "intent-1",
-      before: intent(),
-      after: intent({
-        pullRequests: {
-          main: pullRequestResult(),
-          develop: pullRequestResult({ baseBranch: "develop" }),
-        },
-      }),
-      eventId: "event-1",
-      launchJob,
-      logger: fakeLogger(),
-    });
-
-    expect(launchJob).toHaveBeenCalledTimes(2);
-    expect(launchJob).toHaveBeenCalledWith({ releaseIntentId: "intent-1" });
   });
 
   it("does not launch a malformed document, and does not treat it as an error-worthy condition", async () => {
@@ -129,7 +142,7 @@ describe("launchReleaseCiControl", () => {
     await launchReleaseCiControl({
       documentId: "intent-2",
       before: intent({ releaseIntentId: "intent-1" }),
-      after: intent({ releaseIntentId: "intent-1", pullRequests: { main: pullRequestResult() } }),
+      after: intent({ releaseIntentId: "intent-1", ...bothPullRequests() }),
       eventId: "event-1",
       launchJob,
       logger: fakeLogger(),
@@ -145,7 +158,7 @@ describe("launchReleaseCiControl", () => {
     await launchReleaseCiControl({
       documentId: "intent-1",
       before: intent(),
-      after: intent({ pullRequests: { main: pullRequestResult() } }),
+      after: intent(bothPullRequests()),
       eventId: "event-1",
       launchJob,
       logger,
@@ -168,7 +181,7 @@ describe("launchReleaseCiControl", () => {
       launchReleaseCiControl({
         documentId: "intent-1",
         before: intent(),
-        after: intent({ pullRequests: { main: pullRequestResult() } }),
+        after: intent(bothPullRequests()),
         eventId: "event-1",
         launchJob,
         logger: fakeLogger(),
@@ -188,7 +201,7 @@ describe("launchReleaseCiControl", () => {
     await launchReleaseCiControl({
       documentId: "intent-1",
       before: intent(),
-      after: intent({ pullRequests: { main: pullRequestResult() } }),
+      after: intent(bothPullRequests()),
       eventId: "event-1",
       launchJob,
       logger,

@@ -284,19 +284,20 @@ export const launchAdaReleasePullRequestControl = onDocumentUpdated(
 );
 
 /**
- * Separate again from every trigger above: this one observes the *update* that follows a durable
- * release Pull Request being recorded (`pullRequests.{main|develop}` becoming present, recorded by
+ * Separate again from every trigger above: this one observes the *update* that completes the whole
+ * release-PR-pair (`pullRequests.main` and `pullRequests.develop` both becoming present, recorded by
  * `executor/src/releasePullRequestCompletionController.ts` via `recordReleasePullRequestResult`)
  * and launches the separate `ada-release-ci-controller` Job, which independently observes and
- * durably finalizes the trusted terminal CI result for that target (see
+ * durably finalizes the trusted terminal CI result for both targets in one execution (see
  * `executor/src/releaseCiControllerMain.ts`). `main` and `develop` are persisted as separate
- * document updates, so this trigger checks each target's own absent→present transition
- * independently via `isReleasePullRequestRecordedEligibleForCiControl` and may request a launch for
- * either or both in a single event. Most updates on this document are not that transition (an
- * unrelated field write, and later `ci` persistence — this very stage's own durable output — all
- * pass through the same trigger and are skipped). `releaseIntents/{releaseIntentId}` is also
- * written to directly by unrelated emulator-backed integration tests, so — same as every other
- * launcher above — the emulator path swaps in a no-op Job launcher. Region matches the other
+ * document updates, so this trigger checks the whole-pair-completion transition (not both present →
+ * both present) via `isReleasePullRequestPairCompletionEligibleForCiControl` and requests at most
+ * one launch per eligible event, regardless of which target's write completes the pair. Most
+ * updates on this document are not that transition (an unrelated field write, a pair that is still
+ * incomplete, a pair that was already complete, and later `ci` persistence — this very stage's own
+ * durable output — all pass through the same trigger and are skipped). `releaseIntents/{releaseIntentId}`
+ * is also written to directly by unrelated emulator-backed integration tests, so — same as every
+ * other launcher above — the emulator path swaps in a no-op Job launcher. Region matches the other
  * triggers for the same reason (co-located with the Firestore database they read from).
  */
 export const launchAdaReleaseCiControl = onDocumentUpdated(
@@ -305,9 +306,8 @@ export const launchAdaReleaseCiControl = onDocumentUpdated(
     region: "europe-west2",
     // A transient Cloud Run API failure is rethrown by launchReleaseCiControl so Firebase retries
     // the event; redelivery is safe even though it is not a genuine eligibility re-check — the
-    // release-ci-controller independently finalizes each target and stops polling one once its
-    // result is durably persisted (PR #67), so a redundant launch is a no-op at the controller
-    // level, not a new dedup mechanism needed here.
+    // release-ci-controller independently finalizes both targets within one execution (PR #67), so
+    // a redundant launch is a no-op at the controller level, not a new dedup mechanism needed here.
     // https://firebase.google.com/docs/functions/retries
     retry: true,
     // Must run as the SA granted `roles/run.jobsExecutorWithOverrides` on the

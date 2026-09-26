@@ -1,6 +1,4 @@
-import { isReleasePullRequestRecordedEligibleForCiControl } from "./releaseCiControlEligibility";
-
-import type { ReleaseCiControlTarget } from "./releaseCiControlEligibility";
+import { isReleasePullRequestPairCompletionEligibleForCiControl } from "./releaseCiControlEligibility";
 
 export interface LaunchAdaReleaseCiControllerJobResult {
   /** The Cloud Run long-running operation's resource name, when the client library returns one. */
@@ -40,8 +38,6 @@ export interface LaunchReleaseCiControlParams {
 
 type LaunchErrorClassification = "permission" | "missing-resource" | "invalid-configuration";
 
-const RELEASE_CI_CONTROL_TARGETS: readonly ReleaseCiControlTarget[] = ["main", "develop"];
-
 /**
  * Same gRPC-code classification as `launchReleasePullRequestControl.ts`/`launchAdaMergeControl.ts`'s
  * `classifyLaunchError`: PERMISSION_DENIED (7), NOT_FOUND (5), INVALID_ARGUMENT (3),
@@ -65,28 +61,26 @@ function classifyLaunchError(error: unknown): LaunchErrorClassification | "trans
 
 /**
  * `onDocumentUpdated` handler body for `releaseIntents/{releaseIntentId}`, mirroring
- * `launchReleasePullRequestControl.ts`'s shape but for either release-PR target's
- * `pullRequests.{target}` absent→present transition instead of the release-intent `start`
- * transition — checked independently per target via `isReleasePullRequestRecordedEligibleForCiControl`,
- * since `recordReleasePullRequestResult` persists `main` and `develop` as separate document
- * updates. Most updates on this document are *not* either transition — an unrelated field write, a
- * target that was already present, and the later `ci` persistence this stage's own controller
- * performs all pass through this same trigger and are skipped for both targets.
+ * `launchReleasePullRequestControl.ts`'s shape but for the whole release-PR-pair-completion
+ * transition (both `pullRequests.main` and `pullRequests.develop` becoming present) instead of the
+ * release-intent `start` transition — checked via `isReleasePullRequestPairCompletionEligibleForCiControl`,
+ * which requires both durable PR identities to exist and not have already both existed before the
+ * update. Most updates on this document are *not* that transition — an unrelated field write, a
+ * pair that is still incomplete, a pair that was already complete, and the later `ci` persistence
+ * this stage's own controller performs all pass through this same trigger and are skipped.
  *
- * Never rereads any other Firestore data, and never mutates Firestore — requests one Cloud Run Job
- * execution per newly-eligible target through the injected `launchJob` and never awaits its
- * completion. The release-ci-controller runtime re-verifies PR identity fresh against live GitHub
- * state itself (`releasePullRequestCiObservation.ts`) before ever observing CI; this handler's only
- * job is detecting the durable transition and requesting that a controller execution happen. A
- * redundant or duplicate launch is safe: the release-ci-controller independently finalizes each
- * target and stops polling one once its result is durably persisted (PR #67), so invoking it again
- * for an already-finalized target is a no-op at the controller level, not a new dedup mechanism
- * needed here.
+ * Never rereads any other Firestore data, and never mutates Firestore — requests at most one Cloud
+ * Run Job execution per eligible event through the injected `launchJob` and never awaits its
+ * completion. The release-ci-controller runtime re-verifies both PR identities fresh against live
+ * GitHub state itself (`releasePullRequestCiObservation.ts`) before ever observing CI; this
+ * handler's only job is detecting the durable pair-completion transition and requesting that one
+ * controller execution happen. The controller itself independently handles both targets within the
+ * same execution (PR #67).
  *
- * A permanent failure (permission/missing-resource/invalid-configuration) for one target is logged
- * and swallowed so the platform acknowledges the event instead of retrying forever; a transient
- * error is rethrown immediately (without attempting any remaining target) so the platform
- * redelivers the whole event — safe for the same reason as above.
+ * A permanent failure (permission/missing-resource/invalid-configuration) is logged and swallowed
+ * so the platform acknowledges the event instead of retrying forever; a transient error is
+ * rethrown so the platform redelivers the event — safe, since a redundant launch on redelivery is a
+ * no-op at the controller level, not a new dedup mechanism needed here.
  */
 export async function launchReleaseCiControl({
   documentId,
@@ -96,40 +90,35 @@ export async function launchReleaseCiControl({
   launchJob,
   logger,
 }: LaunchReleaseCiControlParams): Promise<void> {
-  const eligibleTargets = RELEASE_CI_CONTROL_TARGETS.filter((target) =>
-    isReleasePullRequestRecordedEligibleForCiControl({ documentId, target, before, after }),
-  );
+  const eligible = isReleasePullRequestPairCompletionEligibleForCiControl({ documentId, before, after });
 
-  if (eligibleTargets.length === 0) {
+  if (!eligible) {
     logger.info(
-      "ADA release intent update is not a pullRequests-recorded transition for either target; skipping release-ci-controller launch.",
+      "ADA release intent update is not a release-PR-pair-completion transition; skipping release-ci-controller launch.",
       { documentId, eventId },
     );
     return;
   }
 
-  for (const target of eligibleTargets) {
-    let result: LaunchAdaReleaseCiControllerJobResult;
-    try {
-      result = await launchJob({ releaseIntentId: documentId });
-    } catch (error) {
-      const classification = classifyLaunchError(error);
-      if (classification === "transient") {
-        throw error;
-      }
-
-      logger.error(
-        "ADA release-ci-controller Cloud Run Job launch failed with a permanent error; acknowledging without retry.",
-        { documentId, eventId, target, classification },
-      );
-      continue;
+  let result: LaunchAdaReleaseCiControllerJobResult;
+  try {
+    result = await launchJob({ releaseIntentId: documentId });
+  } catch (error) {
+    const classification = classifyLaunchError(error);
+    if (classification === "transient") {
+      throw error;
     }
 
-    logger.info("ADA release-ci-controller Cloud Run Job launch requested.", {
-      releaseIntentId: documentId,
-      eventId,
-      target,
-      operationName: result.operationName,
-    });
+    logger.error(
+      "ADA release-ci-controller Cloud Run Job launch failed with a permanent error; acknowledging without retry.",
+      { documentId, eventId, classification },
+    );
+    return;
   }
+
+  logger.info("ADA release-ci-controller Cloud Run Job launch requested.", {
+    releaseIntentId: documentId,
+    eventId,
+    operationName: result.operationName,
+  });
 }
