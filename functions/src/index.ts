@@ -7,10 +7,15 @@ import { launchAdaCiControllerJob, launchAdaCiControllerJobInEmulator } from "./
 import { launchAdaExecutorJob, launchAdaExecutorJobInEmulator } from "./adaExecutorJobLauncher";
 import { launchAdaMergeControllerJob, launchAdaMergeControllerJobInEmulator } from "./adaMergeControllerJobLauncher";
 import { launchAdaReleaseControllerJob, launchAdaReleaseControllerJobInEmulator } from "./adaReleaseControllerJobLauncher";
+import {
+  launchAdaReleasePullRequestControllerJob,
+  launchAdaReleasePullRequestControllerJobInEmulator,
+} from "./adaReleasePullRequestControllerJobLauncher";
 import { createFirestoreExecutionRunTransaction } from "./firestoreExecutionRunTransaction";
 import { launchAdaMergeControl } from "./launchAdaMergeControl";
 import { launchDeliveryCiControl } from "./launchDeliveryCiControl";
 import { launchExecutionRun } from "./launchExecutionRun";
+import { launchReleasePullRequestControl } from "./launchReleasePullRequestControl";
 import { launchReleaseStart } from "./launchReleaseStart";
 import { handleAdaExecutionRequestPublished } from "./onAdaExecutionRequestPublished";
 import { dispatchTopicName, handleExecutionRequestCreated } from "./onExecutionRequestCreated";
@@ -221,6 +226,56 @@ export const launchAdaReleaseStart = onDocumentCreated(
       // Cloud Run Admin API.
       launchJob:
         process.env.FUNCTIONS_EMULATOR === "true" ? launchAdaReleaseControllerJobInEmulator : launchAdaReleaseControllerJob,
+      logger,
+    });
+  },
+);
+
+/**
+ * Separate again from every trigger above: this one observes the *update* that follows a
+ * successful, durable release-start completion (`start` becoming present, recorded by
+ * `executor/src/releaseStartCompletionController.ts` via `recordReleaseStartResult`) and launches
+ * the separate `ada-release-pr-controller` Job, which independently recovers the trusted release
+ * intent and freshly reconciles GitHub before creating/reusing and verifying both release Pull
+ * Requests (see `executor/src/releasePullRequestControllerMain.ts`). Most updates on this document
+ * are not that transition (an unrelated field write, and later `pullRequests` persistence — this
+ * very stage's own durable output — all pass through the same trigger);
+ * `launchReleasePullRequestControl` fails closed to a no-launch skip for all of them via
+ * `isReleaseStartCompletionEligibleForPullRequestControl`. `releaseIntents/{releaseIntentId}` is
+ * also written to directly by unrelated emulator-backed integration tests, so — same as every
+ * other launcher above — the emulator path swaps in a no-op Job launcher. Region matches the other
+ * triggers for the same reason (co-located with the Firestore database they read from).
+ */
+export const launchAdaReleasePullRequestControl = onDocumentUpdated(
+  {
+    document: "releaseIntents/{releaseIntentId}",
+    region: "europe-west2",
+    // A transient Cloud Run API failure is rethrown by launchReleasePullRequestControl so Firebase
+    // retries the event; redelivery is safe even though it is not a genuine eligibility re-check —
+    // a redelivered launch converges on the same durable per-target PR idempotency contract in
+    // `recordReleasePullRequestResult`, not a new dedup mechanism here.
+    // https://firebase.google.com/docs/functions/retries
+    retry: true,
+    // Must run as the SA granted `roles/run.jobsExecutorWithOverrides` on the
+    // `ada-release-pr-controller` Cloud Run Job. Reuses the same `ada-launcher-runtime` identity as
+    // the other launchers above; granting it that additional binding on the new Job is a live IAM
+    // mutation, deferred to an explicit approval boundary (not performed by this code change) —
+    // same deferral already recorded for the CI/merge/release-start launchers.
+    serviceAccount: "ada-launcher-runtime@kanban-app-fa4b7.iam.gserviceaccount.com",
+  },
+  async (event) => {
+    await launchReleasePullRequestControl({
+      documentId: event.params.releaseIntentId,
+      before: event.data?.before.data(),
+      after: event.data?.after.data(),
+      eventId: event.id,
+      // Same emulator guard as the other launchers above, and for the same reason: emulator-backed
+      // integration tests write to releaseIntents/{id} directly and must never reach the real
+      // Cloud Run Admin API.
+      launchJob:
+        process.env.FUNCTIONS_EMULATOR === "true"
+          ? launchAdaReleasePullRequestControllerJobInEmulator
+          : launchAdaReleasePullRequestControllerJob,
       logger,
     });
   },
